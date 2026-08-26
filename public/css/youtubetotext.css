@@ -186,54 +186,10 @@ main,
   position: relative;
 }
 
-.app-orbs {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 22rem;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.orb-a {
-  width: 16rem;
-  height: 16rem;
-  left: -3rem;
-  top: -2rem;
-  background: color-mix(in srgb, var(--accent) 42%, transparent);
-}
-
-.orb-b {
-  width: 14rem;
-  height: 14rem;
-  right: 8%;
-  top: 1rem;
-  left: auto;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(48px);
-  opacity: 0.4;
-}
-
-.home-page > * {
-  position: relative;
-  z-index: 1;
-}
-
-.home-page > .app-orbs {
-  position: absolute;
-  z-index: 0;
-}
-
 .hero {
   display: grid;
-  gap: 1.5rem 2.25rem;
-  padding: 1.15rem 0 2rem;
+  gap: 1.25rem 2.25rem;
+  padding: 0.35rem 0 1.75rem;
   align-items: start;
 }
 
