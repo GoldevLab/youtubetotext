@@ -29,7 +29,7 @@ Do not put `/robots.txt`, `/sitemap.xml`, `/favicon.svg`, or `/og.svg` in `publi
 
 ## Deploy (Fly.io)
 
-One shared-cpu Machine in Miami (`mia`), autostop when idle. Pushes to `main` deploy via GitHub Actions (`.github/workflows/fly.yml`).
+One shared-cpu Machine in Dallas (`dfw`), autostop when idle. Pushes to `main` deploy via GitHub Actions (`.github/workflows/fly.yml`).
 
 ```bash
 fly apps create youtubetotext
