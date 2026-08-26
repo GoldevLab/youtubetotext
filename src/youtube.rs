@@ -417,9 +417,7 @@ async fn innertube_player(
         "context": { "client": client_obj },
         "videoId": video_id,
         "contentCheckOk": true,
-        "racyCheckOk": true,
-        // yt-dlp flag: skip some playback checks (age/racy) on mobile clients.
-        "params": "CgIQBg=="
+        "racyCheckOk": true
     });
     let url = match client.api_key {
         Some(key) => format!("{PLAYER_URL}&key={key}"),
@@ -827,8 +825,7 @@ async fn fetch_timedtext(url: &str) -> Result<String, FetchError> {
     for fmt in formats {
         let u = set_query(url, "fmt", fmt);
         for (client, ua) in agents {
-            let tagged = set_query(&u, "c", client_code(ua));
-            match timedtext_once(client, ua, &tagged).await {
+            match timedtext_once(client, ua, &u).await {
                 Ok(body) if usable_captions(&body) => return Ok(body),
                 Err(e) if e.status == 429 => return Err(e),
                 Ok(_) => {
@@ -847,18 +844,6 @@ async fn fetch_timedtext(url: &str) -> Result<String, FetchError> {
             "YouTube sent empty captions (this video may require a browser token).",
         )
     }))
-}
-
-fn client_code(ua: &str) -> &'static str {
-    if ua.contains("youtube.vr") {
-        "ANDROID_VR"
-    } else if ua.contains("android.youtube") {
-        "ANDROID"
-    } else if ua.contains("ios.youtube") {
-        "IOS"
-    } else {
-        "WEB"
-    }
 }
 
 fn usable_captions(body: &str) -> bool {
