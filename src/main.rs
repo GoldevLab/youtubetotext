@@ -48,16 +48,19 @@ fn chrome(body: View) -> View {
                     <span class="nav-progress" aria-hidden="true"></span>
                 </div>
             </header>
-            {crate::ads::slot("header", "leaderboard")}
             {with_view_transition(vt, vec![Child::View(body)])}
-            {crate::ads::slot("footer", "leaderboard")}
+            <div class="ad-rail">
+                {crate::ads::slot("footer", "leaderboard")}
+            </div>
             <footer class="site-footer">
                 <p>
                     <strong>"YouTubeToText"</strong>
                     " — free YouTube transcripts, no sign-up. Not affiliated with YouTube or Google."
                 </p>
             </footer>
-            {crate::ads::slot("anchor", "anchor")}
+            <div class="ad-rail ad-rail-end">
+                {crate::ads::slot("anchor", "leaderboard")}
+            </div>
         </div>
     }
 }

@@ -1,9 +1,7 @@
 //! Reserved AdSense slots — empty frames until units are wired.
 //!
 //! Each `data-ad` value is a stable placement id for a future AdSense unit:
-//! header, footer, anchor, home-hero, home-mid, home-faq, home-bottom,
-//! workspace-top, workspace-player, workspace-cues, workspace-loading,
-//! api-top, api-bottom, extension-mid, extension-bottom, error-mid, notfound-mid.
+//! footer and bottom rails live in chrome; in-page units use home-*, workspace-*, api-*, extension-*.
 
 #![allow(unused_imports)]
 use resuma::prelude::*;

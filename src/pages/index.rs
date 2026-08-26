@@ -109,7 +109,6 @@ pub fn page(_req: FlowRequest) -> View {
                     </details>
                 </div>
             </section>
-            {crate::ads::slot("home-bottom", "infeed")}
         </main>
     }
 }
