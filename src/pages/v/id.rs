@@ -19,6 +19,7 @@ pub fn page(req: FlowRequest) -> View {
             move |res| match res {
             Ok(doc) => view! {
                 <main class="workspace-main">
+                    {crate::ads::slot("workspace-top", "infeed")}
                     {workspace(doc, lang_ok, tlang_ok)}
                 </main>
             },
@@ -42,6 +43,7 @@ pub fn page(req: FlowRequest) -> View {
                         <div class="skeleton-line"></div>
                         <div class="skeleton-line w-60"></div>
                     </div>
+                    {crate::ads::slot("workspace-loading", "infeed")}
                 </main>
             }
         },
@@ -55,6 +57,7 @@ fn fail_view(message: String, retry: String, vid: String, lang: String, tlang: S
         <main class="content-section" data-fetch-failed="" data-vid={vid} data-lang={lang} data-tlang={tlang}>
             <h1>"Could not load that transcript"</h1>
             <p class="hero-lead">{message}</p>
+            {crate::ads::slot("error-mid", "infeed")}
             <p class="hint" data-rescue-status="" hidden="" role="status"></p>
             {if blocked {
                 view! {

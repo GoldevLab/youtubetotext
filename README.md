@@ -10,7 +10,8 @@ Live: [youtubetotext.fly.dev](https://youtubetotext.fly.dev)
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Read the YouTube transcript next to a privacy-friendly player (YouTube loads on play)
-- Search, trim intro/outro, copy plain / timed / Markdown
+- Search, trim intro/outro (chips or click two lines), copy plain / timed / Markdown
+- Edit caption typos before copy or download
 - Download **TXT, SRT, VTT, Markdown, JSON**
 - Switch caption tracks and auto-translate (YouTube `tlang`)
 - Chrome/Firefox extension when YouTube blocks server IPs

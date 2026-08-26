@@ -7,6 +7,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p class="hero-lead">
                 "Fetch a public YouTube transcript as JSON, plain text, SRT, VTT, or Markdown. No API key for reasonable use."
             </p>
+            {crate::ads::slot("api-top", "infeed")}
             <pre class="code-block"><code>
 {r#"curl "https://youtubetotext.fly.dev/api/transcript?v=dQw4w9WgXcQ&fmt=json""#}
             </code></pre>
@@ -28,6 +29,7 @@ pub fn page(_req: FlowRequest) -> View {
 {r#"curl "https://youtubetotext.fly.dev/api/transcript?v=dQw4w9WgXcQ&fmt=srt" -o video.srt
 curl "https://youtubetotext.fly.dev/api/transcript?url=https://youtu.be/dQw4w9WgXcQ&lang=en&tlang=es&fmt=md""#}
             </code></pre>
+            {crate::ads::slot("api-bottom", "rectangle")}
             <p>
                 <NavLink href="/" class="btn btn-primary">"Get a transcript"</NavLink>
             </p>

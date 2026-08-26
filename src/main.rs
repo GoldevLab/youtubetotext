@@ -1,6 +1,7 @@
 //! YouTubeToText — free YouTube transcripts in pure Rust (Resuma Flow).
 
 mod actions;
+mod ads;
 mod api;
 mod export;
 mod langs;
@@ -47,13 +48,16 @@ fn chrome(body: View) -> View {
                     <span class="nav-progress" aria-hidden="true"></span>
                 </div>
             </header>
+            {crate::ads::slot("header", "leaderboard")}
             {with_view_transition(vt, vec![Child::View(body)])}
+            {crate::ads::slot("footer", "leaderboard")}
             <footer class="site-footer">
                 <p>
                     <strong>"YouTubeToText"</strong>
                     " — free YouTube transcripts, no sign-up. Not affiliated with YouTube or Google."
                 </p>
             </footer>
+            {crate::ads::slot("anchor", "anchor")}
         </div>
     }
 }
@@ -94,6 +98,7 @@ fn not_found() -> View {
         <main class="content-section">
             <h1>"Page not found"</h1>
             <p class="hero-lead">"That path does not exist on YouTubeToText."</p>
+            {crate::ads::slot("notfound-mid", "infeed")}
             <p>
                 <NavLink href="/" class="btn btn-primary">"Back to home"</NavLink>
             </p>
@@ -106,7 +111,7 @@ const HEAD: &str = r##"
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
 <meta property="og:title" content="YouTube Transcript — Free YouTube to Text, SRT & VTT | YouTubeToText" />
-<meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT/VTT/Markdown, translate. No ads, no account." />
+<meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT/VTT/Markdown, translate. No cookie wall, no account." />
 <meta property="og:type" content="website" />
 "##;
 
@@ -132,7 +137,53 @@ fn seo_kit() -> SeoKit {
             "applicationCategory": "UtilitiesApplication",
             "operatingSystem": "Web",
             "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-            "description": "Free YouTube transcript tool: search, download SRT/VTT/Markdown, translate captions. No ads."
+            "description": "Free YouTube transcript tool: search, download SRT/VTT/Markdown, translate captions. No cookie wall, no account."
+        }))
+        .push_json_ld(json!({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {
+                    "@type": "Question",
+                    "name": "Is YouTubeToText free to use?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Yes. YouTubeToText is free. No account, no sign-up. Public YouTube captions are extracted as-is."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "How do I access the transcript after generating it?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Every transcript has a shareable URL at /v/{videoId}. Optional query params: lang and tlang. Bookmark or paste that link — search engines and notes apps can read the text."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "Can I download the transcript?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON in one click. Copy and Copy Markdown are also available."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "Is there a limit to the length of the video?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "If YouTube has captions for a public video, YouTubeToText can load them. There is no extra length cap on our side."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "Do you offer a YouTube transcript API?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Yes. GET /api/transcript?v=VIDEO_ID&fmt=json|txt|srt|vtt|md with optional lang and tlang. No API key for light use."
+                    }
+                }
+            ]
         }));
     kit.theme_color = Some("#c45c26".into());
     kit.author = "YouTubeToText".into();
@@ -160,7 +211,7 @@ async fn main() -> std::io::Result<()> {
     FlowApp::new()
         .with_title("YouTube Transcript — Free YouTube to Text, SRT & VTT | YouTubeToText")
         .with_description(
-            "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No ads, no account.",
+            "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
         )
         .with_site_url("https://youtubetotext.fly.dev")
         .with_og_image("/og.svg")

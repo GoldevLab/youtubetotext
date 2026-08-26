@@ -123,9 +123,65 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     const fromInp = root.querySelector("[data-from]");
     const toInp = root.querySelector("[data-to]");
     const stamps = root.querySelector("[data-stamps]");
+    const pickBtn = root.querySelector("[data-pick-range]");
+    const editBtn = root.querySelector("[data-edit]");
+    const EDIT_KEY = "youtubetotext-edits-" + (data.video_id || root.dataset.vid);
     let player = null;
     let pendingMs = 0;
     let ytApi = null;
+    let pickRange = false;
+    let rangePick = null;
+
+    const go = (path) => {
+        document.documentElement.classList.add("is-navigating");
+        if (typeof __resuma?.navigate === "function") {
+            Promise.resolve(__resuma.navigate(path)).finally(() => {
+                document.documentElement.classList.remove("is-navigating");
+            });
+        } else {
+            location.assign(path);
+        }
+    };
+    const parseId = (raw) => {
+        const s = String(raw || "").trim();
+        if (/^[\w-]{11}$/.test(s)) return s;
+        try {
+            const u = new URL(s.startsWith("http") ? s : "https://" + s);
+            const v = u.searchParams.get("v") || u.searchParams.get("vi");
+            if (v && /^[\w-]{11}$/.test(v)) return v;
+            const parts = u.pathname.split("/").filter(Boolean);
+            const host = u.hostname.replace(/^www\./, "");
+            if (host === "youtu.be" && /^[\w-]{11}$/.test(parts[0] || "")) return parts[0];
+            const i = parts.findIndex((p) => ["embed","shorts","live","v","watch"].includes(p));
+            const id = i >= 0 ? (parts[i + 1] || "").slice(0, 11) : "";
+            if (/^[\w-]{11}$/.test(id)) return id;
+        } catch (_) {}
+        return null;
+    };
+    const loadEdits = () => {
+        try { return JSON.parse(localStorage.getItem(EDIT_KEY) || "{}"); } catch { return {}; }
+    };
+    const saveEdits = () => {
+        const map = {};
+        for (const c of data.cues) map[c.start_ms] = c.text;
+        try { localStorage.setItem(EDIT_KEY, JSON.stringify(map)); } catch (_) {}
+    };
+    const applyStoredEdits = () => {
+        const edits = loadEdits();
+        data.cues.forEach((c) => {
+            const next = edits[c.start_ms] ?? edits[String(c.start_ms)];
+            if (typeof next === "string") c.text = next;
+        });
+        list?.querySelectorAll(".cue").forEach((el) => {
+            const ms = el.dataset.ms;
+            const next = edits[ms] ?? edits[Number(ms)];
+            if (typeof next !== "string") return;
+            el.dataset.text = next;
+            const span = el.querySelector("[data-cue-text]");
+            if (span) span.textContent = next;
+        });
+    };
+    applyStoredEdits();
 
     const setStatus = (t) => { if (status) { status.textContent = t || ""; status.hidden = !t; } };
     const fmtClock = (ms) => {
@@ -167,6 +223,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             const hide = ms < from || ms > to || (q && !text.includes(q));
             el.hidden = hide;
             el.classList.toggle("is-hit", !hide && !!q);
+            el.classList.toggle("is-range-start", !hide && Number(fromInp?.value || 0) > 0 && ms === from);
+            el.classList.toggle("is-range-end", !hide && rangePick != null && ms === rangePick);
             if (!hide) shown++;
         });
         if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value)
@@ -302,28 +360,114 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         })();
         await playerP;
     };
-    root.querySelector(".toolbar-lang")?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const form = e.currentTarget;
+    const navigateLang = () => {
+        const form = root.querySelector(".toolbar-lang");
+        if (!form) return;
         const params = new URLSearchParams(new FormData(form));
+        if (!params.get("tlang")) params.delete("tlang");
         const qs = params.toString();
         const path = form.getAttribute("action") || location.pathname;
-        const url = qs ? `${path}?${qs}` : path;
-        document.documentElement.classList.add("is-navigating");
-        if (typeof __resuma?.navigate === "function") {
-            Promise.resolve(__resuma.navigate(url)).finally(() => {
-                document.documentElement.classList.remove("is-navigating");
-            });
-        } else {
-            location.assign(url);
-        }
+        go(qs ? `${path}?${qs}` : path);
+    };
+    root.querySelector(".toolbar-lang")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        navigateLang();
+    });
+    root.querySelectorAll("[data-lang-select], [data-tlang-select]").forEach((el) => {
+        el.addEventListener("change", navigateLang);
+    });
+    const setTrim = (fromSec, toSec) => {
+        if (fromInp) fromInp.value = fromSec > 0 ? String(fromSec) : "";
+        if (toInp) toInp.value = toSec > 0 ? String(toSec) : "";
+        applyFilters();
+    };
+    root.querySelectorAll("[data-skip-intro]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const n = Number(btn.getAttribute("data-skip-intro") || 0);
+            const toSec = Number(toInp?.value || 0);
+            setTrim(n, toSec);
+            setStatus(`Skipped the first ${n} seconds.`);
+            setTimeout(() => setStatus(""), 1600);
+        });
+    });
+    root.querySelectorAll("[data-skip-outro]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const n = Number(btn.getAttribute("data-skip-outro") || 0);
+            const max = Math.floor(durationMs() / 1000);
+            const end = Math.max(Number(fromInp?.value || 0), max - n);
+            setTrim(Number(fromInp?.value || 0), end);
+            setStatus(`Skipped the last ${n} seconds.`);
+            setTimeout(() => setStatus(""), 1600);
+        });
+    });
+    root.querySelector("[data-clear-trim]")?.addEventListener("click", () => {
+        rangePick = null;
+        pickRange = false;
+        pickBtn?.setAttribute("aria-pressed", "false");
+        pickBtn?.classList.remove("is-on");
+        setTrim(0, 0);
+        setStatus("Trim cleared.");
+        setTimeout(() => setStatus(""), 1400);
+    });
+    pickBtn?.addEventListener("click", () => {
+        pickRange = !pickRange;
+        rangePick = null;
+        pickBtn.setAttribute("aria-pressed", pickRange ? "true" : "false");
+        pickBtn.classList.toggle("is-on", pickRange);
+        setStatus(pickRange ? "Click a start line, then an end line." : "");
+        if (!pickRange) setTimeout(() => setStatus(""), 400);
+    });
+    const setEditing = (on) => {
+        root.classList.toggle("is-editing", on);
+        editBtn?.setAttribute("aria-pressed", on ? "true" : "false");
+        editBtn?.classList.toggle("is-on", on);
+        list?.querySelectorAll("[data-cue-text]").forEach((span) => {
+            span.contentEditable = on ? "true" : "false";
+            span.spellcheck = true;
+        });
+        setStatus(on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
+        if (!on) setTimeout(() => setStatus(""), 1600);
+    };
+    editBtn?.addEventListener("click", () => setEditing(!root.classList.contains("is-editing")));
+    list?.addEventListener("input", (e) => {
+        const span = e.target.closest?.("[data-cue-text]");
+        const cueEl = span?.closest(".cue");
+        if (!cueEl) return;
+        const ms = Number(cueEl.dataset.ms || 0);
+        const text = span.textContent || "";
+        cueEl.dataset.text = text;
+        const cue = data.cues.find((c) => c.start_ms === ms);
+        if (cue) cue.text = text;
+        saveEdits();
     });
     root.querySelector("[data-play]")?.addEventListener("click", () => mountPlayer(0));
     list?.addEventListener("click", (e) => {
         const a = e.target.closest("a.cue");
         if (!a) return;
         e.preventDefault();
-        mountPlayer(Number(a.dataset.ms || 0));
+        if (root.classList.contains("is-editing") && e.target.closest("[data-cue-text]")) return;
+        const ms = Number(a.dataset.ms || 0);
+        if (pickRange) {
+            if (rangePick == null) {
+                rangePick = ms;
+                if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
+                applyFilters();
+                setStatus("Now click the last line to keep.");
+                return;
+            }
+            let start = rangePick;
+            let end = ms;
+            if (end < start) { const t = start; start = end; end = t; }
+            setTrim(Math.floor(start / 1000), Math.floor(end / 1000));
+            rangePick = null;
+            pickRange = false;
+            pickBtn?.setAttribute("aria-pressed", "false");
+            pickBtn?.classList.remove("is-on");
+            setStatus("Range set. Copy and downloads use these lines.");
+            setTimeout(() => setStatus(""), 2000);
+            return;
+        }
+        mountPlayer(ms);
     });
     root.querySelector("[data-chapters]")?.addEventListener("click", (e) => {
         const a = e.target.closest("a[data-ms]");
@@ -362,9 +506,26 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             setTimeout(() => setStatus(""), 2200);
         });
     });
+    const another = root.querySelector("[data-another]");
+    another?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = another.querySelector('input[name="url"]');
+        const err = another.querySelector("[data-another-error]");
+        const id = parseId(input?.value);
+        if (!id) {
+            if (err) {
+                err.hidden = false;
+                err.textContent = "That does not look like a YouTube link.";
+            }
+            input?.focus();
+            return;
+        }
+        if (err) err.hidden = true;
+        go("/v/" + encodeURIComponent(id));
+    });
     document.addEventListener("keydown", (e) => {
         const tag = document.activeElement?.tagName;
-        if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !document.activeElement?.isContentEditable) {
             e.preventDefault();
             search?.focus();
         }
@@ -403,19 +564,38 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                         <a class="btn btn-ghost" href={watch} target="_blank" rel="noreferrer noopener">"Open on YouTube"</a>
                     </p>
                     {View::raw(chapters_html)}
+                    {crate::ads::slot("workspace-player", "rectangle")}
+                    <form class="another-form" data-another="">
+                        <label>
+                            "Another video"
+                            <span class="hero-field">
+                                <input
+                                    name="url"
+                                    type="text"
+                                    inputmode="url"
+                                    enterkeyhint="go"
+                                    autocomplete="url"
+                                    spellcheck="false"
+                                    placeholder="Paste another YouTube link"
+                                />
+                                <button type="submit" class="btn btn-secondary">"Go"</button>
+                            </span>
+                        </label>
+                        <p class="hint form-error" data-another-error="" hidden="" role="alert"></p>
+                    </form>
                 </div>
             </aside>
             <section class="transcript-col">
                 <form class="toolbar toolbar-lang" method="get" action={action}>
                     <label>
                         "Captions"
-                        <select name="lang">{track_options}</select>
+                        <select name="lang" data-lang-select="">{track_options}</select>
                     </label>
                     <label>
                         "Translate"
-                        <select name="tlang">{tlang_options}</select>
+                        <select name="tlang" data-tlang-select="">{tlang_options}</select>
                     </label>
-                    <button type="submit" class="btn btn-secondary">"Apply"</button>
+                    <button type="submit" class="btn btn-secondary" data-apply="">"Apply"</button>
                 </form>
                 <div class="toolbar">
                     <label class="grow">
@@ -423,6 +603,15 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                         <input type="search" data-search="" placeholder="Filter lines  (press /)" autocomplete="off" />
                     </label>
                     <span class="match-count" data-count=""></span>
+                </div>
+                <div class="toolbar trim-chips">
+                    <span class="prompt-label">"Trim"</span>
+                    <button type="button" class="btn btn-ghost" data-skip-intro="30">"Skip intro 30s"</button>
+                    <button type="button" class="btn btn-ghost" data-skip-intro="60">"Skip intro 60s"</button>
+                    <button type="button" class="btn btn-ghost" data-skip-outro="30">"Skip outro 30s"</button>
+                    <button type="button" class="btn btn-ghost" data-skip-outro="60">"Skip outro 60s"</button>
+                    <button type="button" class="btn btn-ghost" data-pick-range="" aria-pressed="false">"Click two lines"</button>
+                    <button type="button" class="btn btn-ghost" data-clear-trim="">"Clear trim"</button>
                 </div>
                 <div class="toolbar toolbar-actions">
                     <label class="check">
@@ -437,6 +626,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                         "to (s)"
                         <input type="number" data-to="" min="0" max={max_trim} step="1" inputmode="numeric" placeholder="end" />
                     </label>
+                    <button type="button" class="btn btn-ghost" data-edit="" aria-pressed="false">"Edit"</button>
                     <button type="button" class="btn btn-primary" data-copy="">"Copy"</button>
                     <button type="button" class="btn btn-ghost" data-copy-md="">"Copy Markdown"</button>
                     <button type="button" class="btn btn-ghost" data-dl="txt">"TXT"</button>
@@ -453,6 +643,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                     <button type="button" class="btn btn-ghost" data-prompt="quotes">"Quotes"</button>
                 </div>
                 <p class="hint" data-status="" hidden="" role="status" aria-live="polite"></p>
+                {crate::ads::slot("workspace-cues", "infeed")}
                 {View::raw(cues_html)}
             </section>
         </div>
@@ -468,7 +659,7 @@ fn render_cues(video_id: &str, cues: &[Cue]) -> String {
         );
         let clock = format_clock(cue.start_ms, false);
         s.push_str(&format!(
-            r#"<a class="cue" data-ms="{ms}" data-text="{text_attr}" href="{href}" rel="noreferrer noopener"><time>{clock}</time><span>{text}</span></a>"#,
+            r#"<a class="cue" data-ms="{ms}" data-text="{text_attr}" href="{href}" rel="noreferrer noopener"><time>{clock}</time><span data-cue-text="">{text}</span></a>"#,
             ms = cue.start_ms,
             text_attr = html_escape::encode_double_quoted_attribute(&cue.text),
             href = html_escape::encode_double_quoted_attribute(&href),

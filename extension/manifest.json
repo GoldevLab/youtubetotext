@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YouTubeToText",
   "version": "0.1.0",
-  "description": "Get a YouTube transcript: searchable, downloadable SRT/VTT. No ads.",
+  "description": "Get a YouTube transcript: searchable, downloadable SRT/VTT.",
   "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",

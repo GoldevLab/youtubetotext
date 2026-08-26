@@ -46,6 +46,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-bottom: calc(3.6rem + env(safe-area-inset-bottom, 0px));
 }
 
 [data-r-vt] {
@@ -824,12 +825,209 @@ select:focus-visible {
   }
 }
 
+.howto,
+.faq {
+  padding: 0.4rem 0 2.4rem;
+}
+
+.howto h2,
+.faq h2 {
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+}
+
+.howto-grid {
+  list-style: none;
+  margin: 1.2rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.9rem;
+}
+
+.howto-grid li {
+  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.05rem 1.1rem 1.15rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.howto-grid h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.howto-grid p,
+.faq p {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+}
+
+.faq-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+  max-width: 46rem;
+}
+
+.faq details {
+  background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.15rem 1rem 0.15rem;
+}
+
+.faq summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.85rem 0;
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq details[open] summary {
+  color: var(--accent-dim);
+}
+
+.ad-slot {
+  width: 100%;
+  margin: 1rem auto;
+  display: grid;
+  place-items: center;
+}
+
+.ad-slot-frame {
+  width: 100%;
+  border: 1px dashed color-mix(in srgb, var(--line) 80%, var(--accent) 20%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-soft) 55%, transparent);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ad-slot-leaderboard .ad-slot-frame {
+  min-height: 90px;
+}
+
+.ad-slot-rectangle {
+  max-width: 336px;
+}
+
+.ad-slot-rectangle .ad-slot-frame {
+  min-height: 250px;
+}
+
+.ad-slot-infeed .ad-slot-frame {
+  min-height: 100px;
+}
+
+.ad-slot-anchor {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-width: none;
+  margin: 0;
+  padding: 0.4rem 1.25rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  background: var(--glass);
+  backdrop-filter: saturate(1.3) blur(14px);
+  -webkit-backdrop-filter: saturate(1.3) blur(14px);
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.ad-slot-anchor .ad-slot-frame {
+  min-height: 50px;
+  max-width: var(--max);
+  margin: 0 auto;
+}
+
+@media (min-width: 861px) {
+  .app {
+    padding-bottom: calc(6.2rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ad-slot-anchor .ad-slot-frame {
+    min-height: 90px;
+  }
+}
+
+.app > .ad-slot:not(.ad-slot-anchor) {
+  max-width: var(--max);
+  padding: 0 1.25rem;
+  margin: 0.35rem auto;
+}
+
+.trim-chips .btn.is-on,
+[data-edit].is-on,
+[data-pick-range].is-on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--accent-dim);
+}
+
+#ytt-ws[data-ready="1"] [data-apply] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.another-form {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.another-form .hero-field {
+  margin-top: 0.35rem;
+}
+
+.another-form input {
+  flex: 1 1 10rem;
+  min-height: 2.6rem;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.cue.is-range-start,
+.cue.is-range-end {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.is-editing [data-cue-text] {
+  border-radius: 6px;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  padding: 0.05rem 0.2rem;
+}
+
+.is-editing [data-cue-text]:focus {
+  outline: 2px solid var(--accent);
+}
+
 @media print {
   .site-header,
   .site-footer,
   .player-col,
   .toolbar,
-  .prompts {
+  .prompts,
+  .ad-slot,
+  .another-form,
+  .trim-chips {
     display: none !important;
   }
 
