@@ -1,0 +1,19 @@
+FROM rust:1.91-bookworm AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /app/target/release/youtubetotext /app/server
+COPY --from=builder /app/public /app/public
+COPY --from=builder /app/extension /app/public/ytt-extension
+ENV RESUMA_ENV=production
+ENV RESUMA_ADDR=0.0.0.0:8080
+ENV RESUMA_TRUST_PROXY=1
+ENV RESUMA_CSP=0
+ENV CARGO_MANIFEST_DIR=/app
+EXPOSE 8080
+USER 65532:65532
+CMD ["/app/server"]

@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "YouTubeToText",
+  "version": "0.1.0",
+  "description": "Get a YouTube transcript: searchable, downloadable SRT/VTT. No ads.",
+  "permissions": ["activeTab"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://www.youtube-nocookie.com/*",
+    "https://youtubetotext.fly.dev/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Get YouTube transcript",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": ["youtube.js"],
+      "css": ["youtube.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://youtubetotext.fly.dev/*",
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": ["site.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
