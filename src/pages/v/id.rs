@@ -31,9 +31,17 @@ pub fn page(req: FlowRequest) -> View {
         },
         || {
             view! {
-                <main class="content-section">
+                <main class="content-section page-pending">
+                    <p class="eyebrow">"Fetching captions"</p>
                     <h1>"Loading transcript…"</h1>
-                    <p class="hero-lead">"Talking to YouTube."</p>
+                    <p class="hero-lead">"Talking to YouTube. This usually takes a second."</p>
+                    <div class="skeleton-stack" aria-hidden="true">
+                        <div class="skeleton-block"></div>
+                        <div class="skeleton-line w-70"></div>
+                        <div class="skeleton-line w-50"></div>
+                        <div class="skeleton-line"></div>
+                        <div class="skeleton-line w-60"></div>
+                    </div>
                 </main>
             }
         },
@@ -58,17 +66,17 @@ fn fail_view(message: String, retry: String, vid: String, lang: String, tlang: S
                             " talks to YouTube. This computer’s IP is rate-limited. Deploy YouTubeToText (Fly) and paste the link in the browser — no install. The extension is only a backup if cloud IPs get blocked too."
                         </p>
                         <p class="error-actions">
-                            <a class="btn btn-primary" href={retry.clone()}>"Try the server again"</a>
-                            <a class="btn btn-ghost" href="/extension">"Optional: browser backup"</a>
-                            <a class="btn btn-ghost" href="/">"Another video"</a>
+                            <NavLink href={retry.clone()} class="btn btn-primary">"Try the server again"</NavLink>
+                            <NavLink href="/extension" class="btn btn-ghost">"Optional: browser backup"</NavLink>
+                            <NavLink href="/" class="btn btn-ghost">"Another video"</NavLink>
                         </p>
                     </div>
                 }
             } else {
                 view! {
                     <p class="error-actions">
-                        <a class="btn btn-primary" href={retry}>"Try again"</a>
-                        <a class="btn btn-ghost" href="/">"Another video"</a>
+                        <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
+                        <NavLink href="/" class="btn btn-ghost">"Another video"</NavLink>
                     </p>
                 }
             }}

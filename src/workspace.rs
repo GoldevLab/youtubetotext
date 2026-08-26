@@ -302,6 +302,22 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         })();
         await playerP;
     };
+    root.querySelector(".toolbar-lang")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const params = new URLSearchParams(new FormData(form));
+        const qs = params.toString();
+        const path = form.getAttribute("action") || location.pathname;
+        const url = qs ? `${path}?${qs}` : path;
+        document.documentElement.classList.add("is-navigating");
+        if (typeof __resuma?.navigate === "function") {
+            Promise.resolve(__resuma.navigate(url)).finally(() => {
+                document.documentElement.classList.remove("is-navigating");
+            });
+        } else {
+            location.assign(url);
+        }
+    });
     root.querySelector("[data-play]")?.addEventListener("click", () => mountPlayer(0));
     list?.addEventListener("click", (e) => {
         const a = e.target.closest("a.cue");

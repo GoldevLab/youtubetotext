@@ -16,8 +16,8 @@ impl FlowPageRegistry for PagesRegistry {
 
     fn layout_for(&self, pattern: &str) -> &'static [&'static str] {
         match pattern {
-            "/" | "/api" | "/extension" | "/v/:id" => &[],
-            _ => &[],
+            "/" | "/api" | "/extension" | "/v/:id" => &["/"],
+            _ => &["/"],
         }
     }
 

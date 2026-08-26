@@ -4,7 +4,11 @@ use crate::tool::home_search;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
-        <main>
+        <main class="home-page">
+            <div class="app-orbs" aria-hidden="true">
+                <div class="orb orb-a"></div>
+                <div class="orb orb-b"></div>
+            </div>
             <section class="hero">
                 <p class="eyebrow">"YouTube transcript, instantly"</p>
                 <h1>"Free YouTube transcript from any video"</h1>

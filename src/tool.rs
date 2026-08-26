@@ -38,6 +38,16 @@ pub fn home_search() -> View {
         const next = [{ id, title: title || id, at: Date.now() }, ...loadRecent().filter((x) => x.id !== id)].slice(0, 8);
         localStorage.setItem(KEY, JSON.stringify(next));
     };
+    const go = (path) => {
+        document.documentElement.classList.add("is-navigating");
+        if (typeof __resuma?.navigate === "function") {
+            Promise.resolve(__resuma.navigate(path)).finally(() => {
+                document.documentElement.classList.remove("is-navigating");
+            });
+        } else {
+            location.assign(path);
+        }
+    };
     const renderRecent = () => {
         if (!recents) return;
         recents.replaceChildren();
@@ -52,6 +62,7 @@ pub fn home_search() -> View {
             const a = document.createElement("a");
             a.href = "/v/" + encodeURIComponent(x.id);
             a.textContent = x.title || x.id;
+            a.setAttribute("data-r-nav", "true");
             li.appendChild(a);
             ul.appendChild(li);
         }
@@ -84,8 +95,9 @@ pub fn home_search() -> View {
         e.preventDefault();
         if (err) err.hidden = true;
         input?.removeAttribute("aria-invalid");
+        form?.classList.add("is-busy");
         saveRecent(id, id);
-        location.assign("/v/" + encodeURIComponent(id));
+        go("/v/" + encodeURIComponent(id));
     });
 })
 "##

@@ -21,8 +21,8 @@ pub fn page(_req: FlowRequest) -> View {
                 ". Firefox: load a temporary add-on from the same folder. The extension only talks to YouTube and YouTubeToText. No ads."
             </p>
             <p class="error-actions">
-                <a class="btn btn-primary" href="/">"Paste a YouTube link"</a>
-                <a class="btn btn-ghost" href="/api">"Transcript API"</a>
+                <NavLink href="/" class="btn btn-primary">"Paste a YouTube link"</NavLink>
+                <NavLink href="/api" class="btn btn-ghost">"Transcript API"</NavLink>
             </p>
         </main>
     }

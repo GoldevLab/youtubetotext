@@ -29,7 +29,7 @@ pub fn page(_req: FlowRequest) -> View {
 curl "https://youtubetotext.fly.dev/api/transcript?url=https://youtu.be/dQw4w9WgXcQ&lang=en&tlang=es&fmt=md""#}
             </code></pre>
             <p>
-                <a class="btn btn-primary" href="/">"Get a transcript"</a>
+                <NavLink href="/" class="btn btn-primary">"Get a transcript"</NavLink>
             </p>
         </main>
     }

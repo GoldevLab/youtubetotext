@@ -16,22 +16,38 @@ use resuma::prelude::*;
 use resuma::SeoKit;
 use serde_json::json;
 
-#[layout("/")]
-fn RootLayout() -> View {
+fn view_transition_name(path: &str) -> String {
+    let slug = path.trim_matches('/');
+    if slug.is_empty() {
+        "home".into()
+    } else {
+        slug.replace('/', "-")
+    }
+}
+
+fn chrome(body: View) -> View {
+    let vt = view_transition_name(
+        &current_request()
+            .map(|r| r.path)
+            .unwrap_or_else(|| "/".into()),
+    );
     view! {
         <div class="app">
             <header class="site-header">
-                <a class="brand" href="/">
-                    <span class="brand-mark" aria-hidden="true"></span>
-                    <span class="brand-name">"YouTubeToText"</span>
-                </a>
-                <nav class="nav">
-                    <NavLink href="/" activeClass="is-active">"Transcript"</NavLink>
-                    <NavLink href="/extension" activeClass="is-active">"Extension"</NavLink>
-                    <NavLink href="/api" activeClass="is-active">"API"</NavLink>
-                </nav>
+                <div class="header-inner">
+                    <NavLink href="/" class="brand" activeClass="is-active" exact=true>
+                        <span class="brand-mark" aria-hidden="true"></span>
+                        <span class="brand-name">"YouTubeToText"</span>
+                    </NavLink>
+                    <nav class="nav" data-r-nav-exclusive="">
+                        <NavLink href="/" class="nav-link" activeClass="is-active" exact=true>"Transcript"</NavLink>
+                        <NavLink href="/extension" class="nav-link" activeClass="is-active" exact=true>"Extension"</NavLink>
+                        <NavLink href="/api" class="nav-link" activeClass="is-active" exact=true>"API"</NavLink>
+                    </nav>
+                    <span class="nav-progress" aria-hidden="true"></span>
+                </div>
             </header>
-            <Slot />
+            {with_view_transition(vt, vec![Child::View(body)])}
             <footer class="site-footer">
                 <p>
                     <strong>"YouTubeToText"</strong>
@@ -42,16 +58,47 @@ fn RootLayout() -> View {
     }
 }
 
+#[layout("/")]
+fn RootLayout() -> View {
+    visible_task!(
+        r#"
+        async (_state, __resuma) => {
+            const onNav = () => {
+                document.documentElement.classList.remove("is-navigating");
+                const heading = document.querySelector("[data-r-vt] h1");
+                if (!heading) return;
+                heading.setAttribute("tabindex", "-1");
+                heading.focus({ preventScroll: true });
+            };
+            const onClick = (e) => {
+                const el = e.target instanceof Element ? e.target.closest("a[data-r-nav]") : null;
+                if (el?.getAttribute("href")) {
+                    document.documentElement.classList.add("is-navigating");
+                }
+            };
+            document.addEventListener("resuma:navigate", onNav);
+            document.addEventListener("click", onClick, true);
+            return () => {
+                document.removeEventListener("resuma:navigate", onNav);
+                document.removeEventListener("click", onClick, true);
+            };
+        }
+    "#
+    );
+
+    chrome(view! { <Slot /> })
+}
+
 fn not_found() -> View {
-    view! {
+    chrome(view! {
         <main class="content-section">
             <h1>"Page not found"</h1>
             <p class="hero-lead">"That path does not exist on YouTubeToText."</p>
             <p>
-                <a class="btn btn-primary" href="/">"Back to home"</a>
+                <NavLink href="/" class="btn btn-primary">"Back to home"</NavLink>
             </p>
         </main>
-    }
+    })
 }
 
 const HEAD: &str = r##"
