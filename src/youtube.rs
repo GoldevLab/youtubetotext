@@ -12,13 +12,14 @@ use crate::langs::{language_name, translation_catalog};
 use crate::parse::is_id;
 
 const VR_UA: &str = "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
-const IOS_UA: &str = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; en_US)";
-const ANDROID_UA: &str = "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip";
+const IOS_UA: &str = "com.google.ios.youtube/20.11.6 (iPhone14,5; U; CPU iOS 18_5 like Mac OS X;)";
+const ANDROID_UA: &str = "com.google.android.youtube/21.29.366 (Linux; U; Android 16; en_US; SM-S908E Build/TP1A.220624.014) gzip";
 const WEB_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const PLAYER_URL: &str = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
+const TRANSCRIPT_URL: &str = "https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false";
+const WEB_CLIENT_VERSION: &str = "2.20260722.01.00";
 /// Public InnerTube keys shipped in official YouTube clients.
 const WEB_INNERTUBE_KEY: &str = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
-const ANDROID_INNERTUBE_KEY: &str = "AIzaSyA8eiZmM1FaDVz4ve3x5lWK4ntUNQ2-7oc";
 const CACHE_TTL: Duration = Duration::from_secs(45 * 60);
 const CACHE_CAP: usize = 256;
 
@@ -176,48 +177,69 @@ async fn fetch_uncached(
         ));
     }
 
-    let chosen = pick_track(&tracks, lang).ok_or_else(|| {
-        FetchError::new(404, "No caption track matches that language.")
-    })?;
+    let ordered = tracks_for_fetch(&tracks, lang);
+    if ordered.is_empty() {
+        return Err(FetchError::new(404, "No caption track matches that language."));
+    }
 
-    let timed_url = caption_url(&chosen.base_url, tlang.filter(|s| !s.eq_ignore_ascii_case(&chosen.lang)));
-
-    let body = match fetch_timedtext(&timed_url).await {
-        Ok(b) => b,
-        Err(first) if first.status == 429 => {
-            *RATE_LIMIT_UNTIL.lock() = Some(Instant::now() + RATE_LIMIT_COOLDOWN);
-            return Err(first);
+    let mut chosen = ordered[0];
+    let mut body: Option<String> = None;
+    let mut last_err: Option<FetchError> = None;
+    for track in &ordered {
+        if needs_pot(&track.base_url) {
+            continue;
         }
-        Err(first) => {
-            if let Ok(player) = watch_page_player(video_id, "en").await {
-                let alt = caption_tracks(&player);
-                if let Some(track) = pick_track(&alt, lang) {
-                    let fallback = caption_url(
-                        &track.base_url,
-                        tlang.filter(|s| !s.eq_ignore_ascii_case(&track.lang)),
-                    );
-                    match fetch_timedtext(&fallback).await {
-                        Ok(b) => b,
-                        Err(e) if e.status == 429 => {
-                            *RATE_LIMIT_UNTIL.lock() = Some(Instant::now() + RATE_LIMIT_COOLDOWN);
-                            return Err(e);
-                        }
-                        Err(_) => return Err(first),
-                    }
-                } else {
-                    return Err(first);
-                }
-            } else {
-                return Err(first);
+        let timed_url = caption_url(
+            &track.base_url,
+            tlang.filter(|s| !s.eq_ignore_ascii_case(&track.lang)),
+        );
+        match fetch_timedtext(&timed_url).await {
+            Ok(b) => {
+                chosen = *track;
+                body = Some(b);
+                break;
+            }
+            Err(e) if e.status == 429 => {
+                *RATE_LIMIT_UNTIL.lock() = Some(Instant::now() + RATE_LIMIT_COOLDOWN);
+                return Err(e);
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+
+    let mut cues = if let Some(raw) = body {
+        parse_captions(&raw)
+    } else {
+        Vec::new()
+    };
+
+    if cues.is_empty() {
+        let lang_code = lang
+            .unwrap_or(chosen.lang.as_str())
+            .split('|')
+            .next()
+            .unwrap_or(chosen.lang.as_str())
+            .to_string();
+        let asr = chosen.kind == "asr" || lang.is_some_and(|s| s.ends_with("|asr"));
+        if let Ok(from_panel) = innertube_transcript(video_id, &lang_code, asr).await {
+            if !from_panel.is_empty() {
+                cues = from_panel;
             }
         }
-    };
-    let mut cues = parse_captions(&body);
+        if cues.is_empty() {
+            if let Ok(from_panel) = innertube_transcript(video_id, &lang_code, !asr).await {
+                cues = from_panel;
+            }
+        }
+    }
+
     if cues.is_empty() {
-        return Err(FetchError::new(
-            502,
-            "YouTube returned an empty caption file. Wait a moment and try again.",
-        ));
+        return Err(last_err.unwrap_or_else(|| {
+            FetchError::new(
+                502,
+                "YouTube sent empty captions (this video may require a browser token).",
+            )
+        }));
     }
     cues.sort_by_key(|c| c.start_ms);
     stitch_durations(&mut cues);
@@ -272,32 +294,42 @@ struct TubeClient {
     extra: Value,
 }
 
-fn listing_clients() -> [TubeClient; 3] {
+fn listing_clients() -> [TubeClient; 4] {
     [
+        // ANDROID first: its timedtext URLs usually omit exp=xpe (no PoToken).
+        TubeClient {
+            name: "ANDROID",
+            version: "21.29.366",
+            ua: ANDROID_UA,
+            client_header: "3",
+            api_key: None,
+            extra: json!({
+                "androidSdkVersion": 33,
+                "osName": "Android",
+                "osVersion": "16",
+                "platform": "MOBILE"
+            }),
+        },
         TubeClient {
             name: "IOS",
-            version: "20.10.4",
+            version: "20.11.6",
             ua: IOS_UA,
             client_header: "5",
             api_key: Some(WEB_INNERTUBE_KEY),
             extra: json!({
                 "deviceMake": "Apple",
-                "deviceModel": "iPhone16,2",
+                "deviceModel": "iPhone14,5",
                 "osName": "iPhone",
-                "osVersion": "18.3.2.22D82"
+                "osVersion": "18.5.0.22F76"
             }),
         },
         TubeClient {
-            name: "ANDROID",
-            version: "20.10.38",
-            ua: ANDROID_UA,
-            client_header: "3",
-            api_key: Some(ANDROID_INNERTUBE_KEY),
-            extra: json!({
-                "androidSdkVersion": 34,
-                "osName": "Android",
-                "osVersion": "14"
-            }),
+            name: "TVHTML5",
+            version: WEB_CLIENT_VERSION,
+            ua: WEB_UA,
+            client_header: "7",
+            api_key: Some(WEB_INNERTUBE_KEY),
+            extra: json!({}),
         },
         TubeClient {
             name: "ANDROID_VR",
@@ -324,9 +356,6 @@ async fn player_bundle(
     let mut chapters: Vec<Chapter> = Vec::new();
 
     for hl in ["en", "es"] {
-        if !tracks.is_empty() {
-            break;
-        }
         for client in listing_clients() {
             if let Ok(player) = innertube_player(video_id, &client, hl).await {
                 if let Some((m, t, ch)) = extract_bundle(&player) {
@@ -339,22 +368,20 @@ async fn player_bundle(
                     }
                 }
             }
-            if !tracks.is_empty() {
-                break;
-            }
         }
-        if tracks.is_empty() {
-            if let Ok(player) = watch_page_player(video_id, hl).await {
-                if let Some((m, t, ch)) = extract_bundle(&player) {
-                    if meta.is_none() {
-                        meta = Some(m);
-                    }
-                    merge_tracks(&mut tracks, t);
-                    if chapters.is_empty() {
-                        chapters = ch;
-                    }
+        if let Ok(player) = watch_page_player(video_id, hl).await {
+            if let Some((m, t, ch)) = extract_bundle(&player) {
+                if meta.is_none() {
+                    meta = Some(m);
+                }
+                merge_tracks(&mut tracks, t);
+                if chapters.is_empty() {
+                    chapters = ch;
                 }
             }
+        }
+        if tracks.iter().any(|t| !needs_pot(&t.base_url)) {
+            break;
         }
     }
 
@@ -402,6 +429,7 @@ async fn innertube_player(
         .post(&url)
         .header("User-Agent", client.ua)
         .header("Content-Type", "application/json")
+        .header("Origin", "https://www.youtube.com")
         .header("X-YouTube-Client-Name", client.client_header)
         .header("X-YouTube-Client-Version", client.version)
         .json(&payload)
@@ -573,8 +601,8 @@ fn track_from_item(item: &Value) -> Option<RemoteTrack> {
         .get("baseUrl")
         .or_else(|| item.get("url"))
         .and_then(|v| v.as_str())
-        .filter(|u| !u.is_empty())?
-        .to_string();
+        .filter(|u| !u.is_empty())
+        .map(absolutize_caption_url)?;
     let lang = item
         .get("languageCode")
         .and_then(|v| v.as_str())
@@ -599,13 +627,79 @@ fn track_from_item(item: &Value) -> Option<RemoteTrack> {
     })
 }
 
+fn needs_pot(url: &str) -> bool {
+    url.contains("exp=xpe") || url.contains("exp=xp")
+}
+
+fn caption_url_rank(url: &str) -> u8 {
+    if needs_pot(url) {
+        0
+    } else if url.contains("fmt=srv3") {
+        2
+    } else {
+        1
+    }
+}
+
+fn absolutize_caption_url(url: &str) -> String {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        url.to_string()
+    } else if url.starts_with('/') {
+        format!("https://www.youtube.com{url}")
+    } else {
+        format!("https://www.youtube.com/{url}")
+    }
+}
+
+fn tracks_for_fetch<'a>(tracks: &'a [RemoteTrack], lang: Option<&str>) -> Vec<&'a RemoteTrack> {
+    if lang.is_some() && pick_track(tracks, lang).is_none() {
+        return Vec::new();
+    }
+    let mut out: Vec<&RemoteTrack> = tracks.iter().collect();
+    out.sort_by(|a, b| {
+        caption_url_rank(&b.base_url)
+            .cmp(&caption_url_rank(&a.base_url))
+            .then_with(|| track_lang_rank(b, lang).cmp(&track_lang_rank(a, lang)))
+    });
+    out
+}
+
+fn track_lang_rank(t: &RemoteTrack, lang: Option<&str>) -> u8 {
+    let wanted = lang.map(|s| s.trim()).filter(|s| !s.is_empty());
+    if let Some(w) = wanted {
+        let asr = w.ends_with("|asr");
+        let code = w.strip_suffix("|asr").unwrap_or(w);
+        let lang_hit = t.lang.eq_ignore_ascii_case(code)
+            || t.lang
+                .split(['-', '_'])
+                .next()
+                .unwrap_or("")
+                .eq_ignore_ascii_case(code.split(['-', '_']).next().unwrap_or(""));
+        match (lang_hit, asr, t.kind == "asr") {
+            (true, true, true) => 6,
+            (true, false, false) => 6,
+            (true, false, true) => 5,
+            (true, true, false) => 5,
+            _ => 0,
+        }
+    } else {
+        let en = t.lang.to_ascii_lowercase().starts_with("en");
+        match (t.kind == "asr", en) {
+            (false, true) => 4,
+            (false, false) => 3,
+            (true, true) => 2,
+            (true, false) => 1,
+        }
+    }
+}
+
 fn merge_tracks(into: &mut Vec<RemoteTrack>, extra: Vec<RemoteTrack>) {
     for t in extra {
         if let Some(existing) = into
             .iter_mut()
             .find(|e| e.lang.eq_ignore_ascii_case(&t.lang) && e.kind == t.kind)
         {
-            if existing.base_url.contains("exp=") && !t.base_url.contains("exp=") {
+            if caption_url_rank(&t.base_url) > caption_url_rank(&existing.base_url) {
                 *existing = t;
             }
         } else {
@@ -723,18 +817,18 @@ async fn fetch_timedtext(url: &str) -> Result<String, FetchError> {
             ));
         }
     }
-    let formats = ["json3", "vtt", "srv3"];
-    let agents: [(&reqwest::Client, &str); 4] = [
-        (&*HTTP_VR, IOS_UA),
+    let formats = ["json3", "srv3", "vtt"];
+    let agents: [(&reqwest::Client, &str); 3] = [
         (&*HTTP_VR, ANDROID_UA),
-        (&*HTTP_VR, VR_UA),
+        (&*HTTP_VR, IOS_UA),
         (&*HTTP_WEB, WEB_UA),
     ];
     let mut last_err: Option<FetchError> = None;
     for fmt in formats {
         let u = set_query(url, "fmt", fmt);
         for (client, ua) in agents {
-            match timedtext_once(client, ua, &u).await {
+            let tagged = set_query(&u, "c", client_code(ua));
+            match timedtext_once(client, ua, &tagged).await {
                 Ok(body) if usable_captions(&body) => return Ok(body),
                 Err(e) if e.status == 429 => return Err(e),
                 Ok(_) => {
@@ -755,6 +849,18 @@ async fn fetch_timedtext(url: &str) -> Result<String, FetchError> {
     }))
 }
 
+fn client_code(ua: &str) -> &'static str {
+    if ua.contains("youtube.vr") {
+        "ANDROID_VR"
+    } else if ua.contains("android.youtube") {
+        "ANDROID"
+    } else if ua.contains("ios.youtube") {
+        "IOS"
+    } else {
+        "WEB"
+    }
+}
+
 fn usable_captions(body: &str) -> bool {
     !body.trim().is_empty() && !parse_captions(body).is_empty()
 }
@@ -768,6 +874,8 @@ async fn timedtext_once(
         .get(url)
         .header("User-Agent", ua)
         .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Origin", "https://www.youtube.com")
+        .header("Referer", "https://www.youtube.com/")
         .send()
         .await
         .map_err(|e| FetchError::new(502, format!("Caption request failed ({e}).")))?;
@@ -786,6 +894,170 @@ async fn timedtext_once(
         .await
         .map_err(|_| FetchError::new(502, "Caption file could not be read."))?;
     Ok(body)
+}
+
+async fn innertube_transcript(
+    video_id: &str,
+    lang: &str,
+    asr: bool,
+) -> Result<Vec<Cue>, FetchError> {
+    let params = transcript_params(video_id, lang, asr);
+    let payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB",
+                "clientVersion": WEB_CLIENT_VERSION,
+                "hl": lang,
+                "gl": "US"
+            }
+        },
+        "params": params
+    });
+    let resp = HTTP_WEB
+        .post(TRANSCRIPT_URL)
+        .header("User-Agent", WEB_UA)
+        .header("Content-Type", "application/json")
+        .header("Origin", "https://www.youtube.com")
+        .header("X-YouTube-Client-Name", "1")
+        .header("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Could not reach YouTube transcript ({e}).")))?;
+    if !resp.status().is_success() {
+        return Err(FetchError::new(
+            resp.status().as_u16(),
+            "YouTube transcript panel request failed.",
+        ));
+    }
+    let val: Value = resp
+        .json()
+        .await
+        .map_err(|_| FetchError::new(502, "YouTube transcript panel was not JSON."))?;
+    if val.get("error").is_some() {
+        return Err(FetchError::new(400, "YouTube transcript panel request failed."));
+    }
+    let cues = parse_transcript_panel(&val);
+    if cues.is_empty() {
+        return Err(FetchError::new(404, "Transcript panel had no lines."));
+    }
+    Ok(cues)
+}
+
+fn transcript_params(video_id: &str, lang: &str, asr: bool) -> String {
+    let kind = if asr { "asr" } else { "" };
+    let mut inner = pb_string(1, kind);
+    inner.extend(pb_string(2, lang));
+    inner.extend(pb_string(3, ""));
+    let mut msg = pb_string(1, video_id);
+    msg.extend(pb_bytes(2, &inner));
+    msg.extend(pb_varint_field(3, 1));
+    msg.extend(pb_string(
+        5,
+        "engagement-panel-searchable-transcript-search-panel",
+    ));
+    msg.extend(pb_varint_field(6, 1));
+    msg.extend(pb_varint_field(7, 1));
+    msg.extend(pb_varint_field(8, 1));
+    b64url_nopad(&msg)
+}
+
+fn pb_varint(mut n: u64) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let mut b = (n & 0x7f) as u8;
+        n >>= 7;
+        if n != 0 {
+            b |= 0x80;
+        }
+        out.push(b);
+        if n == 0 {
+            break;
+        }
+    }
+    out
+}
+
+fn pb_string(field: u32, s: &str) -> Vec<u8> {
+    pb_bytes(field, s.as_bytes())
+}
+
+fn pb_bytes(field: u32, data: &[u8]) -> Vec<u8> {
+    let mut out = pb_varint(u64::from(field) << 3 | 2);
+    out.extend(pb_varint(data.len() as u64));
+    out.extend_from_slice(data);
+    out
+}
+
+fn pb_varint_field(field: u32, n: u64) -> Vec<u8> {
+    let mut out = pb_varint(u64::from(field) << 3);
+    out.extend(pb_varint(n));
+    out
+}
+
+fn b64url_nopad(input: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::new();
+    let mut i = 0;
+    while i < input.len() {
+        let b0 = input[i];
+        let b1 = if i + 1 < input.len() { input[i + 1] } else { 0 };
+        let b2 = if i + 2 < input.len() { input[i + 2] } else { 0 };
+        let triple = u32::from(b0) << 16 | u32::from(b1) << 8 | u32::from(b2);
+        out.push(A[((triple >> 18) & 63) as usize] as char);
+        out.push(A[((triple >> 12) & 63) as usize] as char);
+        if i + 1 < input.len() {
+            out.push(A[((triple >> 6) & 63) as usize] as char);
+        }
+        if i + 2 < input.len() {
+            out.push(A[(triple & 63) as usize] as char);
+        }
+        i += 3;
+    }
+    out
+}
+
+fn parse_transcript_panel(v: &Value) -> Vec<Cue> {
+    let mut out = Vec::new();
+    collect_transcript_cues(v, &mut out);
+    out
+}
+
+fn collect_transcript_cues(v: &Value, out: &mut Vec<Cue>) {
+    match v {
+        Value::Array(arr) => {
+            for x in arr {
+                collect_transcript_cues(x, out);
+            }
+        }
+        Value::Object(map) => {
+            if let Some(seg) = map.get("transcriptSegmentRenderer") {
+                if let Some(cue) = cue_from_segment(seg) {
+                    out.push(cue);
+                }
+                return;
+            }
+            for x in map.values() {
+                collect_transcript_cues(x, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn cue_from_segment(seg: &Value) -> Option<Cue> {
+    let start_ms = json_u64(seg.get("startMs"));
+    let end_ms = json_u64(seg.get("endMs"));
+    let text = json_text(seg.get("snippet")).unwrap_or_default();
+    let text = normalize_caption(&text);
+    if text.is_empty() {
+        return None;
+    }
+    Some(Cue {
+        start_ms,
+        duration_ms: end_ms.saturating_sub(start_ms),
+        text,
+    })
 }
 
 pub fn parse_captions(body: &str) -> Vec<Cue> {
@@ -1310,7 +1582,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_prefers_unsigned_urls() {
+    fn merge_prefers_android_srv3_over_pot_url() {
         let mut tracks = vec![RemoteTrack {
             lang: "en".into(),
             name: "English".into(),
@@ -1325,11 +1597,66 @@ mod tests {
                 name: "English".into(),
                 kind: String::new(),
                 translatable: true,
-                base_url: "https://www.youtube.com/api/timedtext?v=x&lang=en".into(),
+                base_url: "https://www.youtube.com/api/timedtext?v=x&fmt=srv3&lang=en".into(),
             }],
         );
         assert_eq!(tracks.len(), 1);
-        assert!(!tracks[0].base_url.contains("exp="));
+        assert!(tracks[0].base_url.contains("fmt=srv3"));
+        assert!(!needs_pot(&tracks[0].base_url));
+    }
+
+    #[test]
+    fn absolutize_relative_timedtext() {
+        assert_eq!(
+            absolutize_caption_url("/api/timedtext?v=x"),
+            "https://www.youtube.com/api/timedtext?v=x"
+        );
+    }
+
+    #[test]
+    fn transcript_params_are_urlsafe() {
+        let p = transcript_params("dQw4w9WgXcQ", "en", true);
+        assert!(!p.is_empty());
+        assert!(p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+    }
+
+    #[test]
+    fn parse_transcript_panel_segments() {
+        let v: Value = serde_json::from_str(
+            r#"{
+              "actions": [{
+                "updateEngagementPanelAction": {
+                  "content": {
+                    "transcriptRenderer": {
+                      "content": {
+                        "transcriptSearchPanelRenderer": {
+                          "body": {
+                            "transcriptSegmentListRenderer": {
+                              "initialSegments": [
+                                {
+                                  "transcriptSegmentRenderer": {
+                                    "startMs": "1200",
+                                    "endMs": "3000",
+                                    "snippet": {"simpleText": "Hello there"}
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }]
+            }"#,
+        )
+        .unwrap();
+        let cues = parse_transcript_panel(&v);
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].text, "Hello there");
+        assert_eq!(cues[0].start_ms, 1200);
+        assert_eq!(cues[0].duration_ms, 1800);
     }
 
     #[test]
