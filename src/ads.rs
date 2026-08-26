@@ -5,6 +5,7 @@
 //! workspace-top, workspace-player, workspace-cues, workspace-loading,
 //! api-top, api-bottom, extension-mid, extension-bottom, error-mid, notfound-mid.
 
+#![allow(unused_imports)]
 use resuma::prelude::*;
 
 pub fn slot(placement: &'static str, size: &'static str) -> View {
