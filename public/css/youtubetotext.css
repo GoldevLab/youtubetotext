@@ -188,12 +188,29 @@ main,
 
 .app-orbs {
   position: absolute;
-  inset: 0 auto auto 0;
-  width: min(36rem, 70%);
-  height: 16rem;
+  inset: 0;
+  width: 100%;
+  height: 22rem;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+}
+
+.orb-a {
+  width: 16rem;
+  height: 16rem;
+  left: -3rem;
+  top: -2rem;
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.orb-b {
+  width: 14rem;
+  height: 14rem;
+  right: 8%;
+  top: 1rem;
+  left: auto;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .orb {
@@ -201,22 +218,6 @@ main,
   border-radius: 50%;
   filter: blur(48px);
   opacity: 0.4;
-}
-
-.orb-a {
-  width: 14rem;
-  height: 14rem;
-  left: -4rem;
-  top: -3rem;
-  background: color-mix(in srgb, var(--accent) 42%, transparent);
-}
-
-.orb-b {
-  width: 10rem;
-  height: 10rem;
-  left: 10rem;
-  top: 2rem;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .home-page > * {
@@ -230,7 +231,38 @@ main,
 }
 
 .hero {
-  padding: 0.85rem 0 1.6rem;
+  display: grid;
+  gap: 1.5rem 2.25rem;
+  padding: 1.15rem 0 2rem;
+  align-items: start;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.hero-aside {
+  display: grid;
+  place-items: start stretch;
+}
+
+.hero-aside .ad-slot {
+  margin: 0;
+  width: 100%;
+}
+
+.hero-aside .ad-slot-rectangle {
+  max-width: none;
+}
+
+.hero-aside .ad-slot-frame {
+  min-height: 250px;
+}
+
+@media (min-width: 880px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
 }
 
 .eyebrow {
@@ -251,14 +283,14 @@ h3 {
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 3.15rem);
+  font-size: clamp(2rem, 4.6vw, 3.05rem);
   line-height: 1.12;
-  max-width: 18ch;
+  max-width: 16ch;
 }
 
 .hero-lead {
-  margin: 0.85rem 0 1.5rem;
-  max-width: 46ch;
+  margin: 0.85rem 0 1.35rem;
+  max-width: 40ch;
   color: var(--muted);
   font-size: 1.12rem;
   line-height: 1.55;
@@ -270,7 +302,8 @@ h3 {
   border-radius: var(--radius);
   padding: 1.15rem 1.2rem 1.05rem;
   box-shadow: var(--shadow);
-  max-width: 52rem;
+  width: 100%;
+  max-width: none;
   backdrop-filter: saturate(1.3) blur(16px);
   -webkit-backdrop-filter: saturate(1.3) blur(16px);
 }
@@ -873,7 +906,6 @@ select:focus-visible {
   display: grid;
   gap: 0.55rem;
   margin-top: 1.1rem;
-  max-width: 46rem;
 }
 
 .faq details {

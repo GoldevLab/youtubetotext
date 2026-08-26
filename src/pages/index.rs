@@ -10,15 +10,18 @@ pub fn page(_req: FlowRequest) -> View {
                 <div class="orb orb-b"></div>
             </div>
             <section class="hero">
-                <p class="eyebrow">"YouTube transcript, instantly"</p>
-                <h1>"Free YouTube transcript from any video"</h1>
-                <p class="hero-lead">
-                    "Paste a YouTube link. Get the transcript: searchable, downloadable as SRT/VTT/Markdown, translatable, shareable. No cookie wall, no account — a cleaner YouTube to text tool."
-                </p>
-                {home_search()}
+                <div class="hero-copy">
+                    <p class="eyebrow">"YouTube transcript, instantly"</p>
+                    <h1>"Free YouTube transcript from any video"</h1>
+                    <p class="hero-lead">
+                        "Paste a YouTube link. Get the transcript: searchable, downloadable as SRT/VTT/Markdown, translatable, shareable. No cookie wall, no account — a cleaner YouTube to text tool."
+                    </p>
+                    {home_search()}
+                </div>
+                <aside class="hero-aside">
+                    {crate::ads::slot("home-hero", "rectangle")}
+                </aside>
             </section>
-
-            {crate::ads::slot("home-hero", "infeed")}
 
             <section class="howto" aria-labelledby="howto-title">
                 <h2 id="howto-title">"How to get a YouTube transcript"</h2>
