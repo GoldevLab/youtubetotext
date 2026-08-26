@@ -9,10 +9,12 @@ WORKDIR /app
 COPY --from=builder /app/target/release/youtubetotext /app/server
 COPY --from=builder /app/public /app/public
 COPY --from=builder /app/extension /app/public/ytt-extension
+RUN mkdir -p /data && chown 65532:65532 /data
 ENV RESUMA_ENV=production
 ENV RESUMA_ADDR=0.0.0.0:8080
 ENV RESUMA_TRUST_PROXY=1
 ENV RESUMA_CSP=0
+ENV RESUMA_DATA_DIR=/data
 ENV CARGO_MANIFEST_DIR=/app
 EXPOSE 8080
 USER 65532:65532
