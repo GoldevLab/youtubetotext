@@ -54,7 +54,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         .replace('<', "\\u003c")
         .replace('\u{2028}', "\\u2028")
         .replace('\u{2029}', "\\u2029");
-    let cues_html = render_cues(&video_id, &doc.cues);
+    let cues_html = render_cues(&doc.cues);
     let chapters_html = render_chapters(&video_id, &doc.chapters);
     let track_options = doc
         .tracks
@@ -216,6 +216,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     const applyFilters = () => {
         const q = (search?.value || "").trim().toLowerCase();
         const { from, to } = rangeMs();
+        const fromRaw = Number(fromInp?.value || 0);
+        const toRaw = Number(toInp?.value || 0);
         let shown = 0;
         list?.querySelectorAll(".cue").forEach((el) => {
             const ms = Number(el.dataset.ms || 0);
@@ -223,13 +225,55 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             const hide = ms < from || ms > to || (q && !text.includes(q));
             el.hidden = hide;
             el.classList.toggle("is-hit", !hide && !!q);
-            el.classList.toggle("is-range-start", !hide && Number(fromInp?.value || 0) > 0 && ms === from);
-            el.classList.toggle("is-range-end", !hide && rangePick != null && ms === rangePick);
+            el.classList.toggle("is-range-start", !hide && fromRaw > 0 && ms === from);
+            el.classList.toggle("is-range-end", !hide && (ms === rangePick || (toRaw > 0 && ms === to)));
             if (!hide) shown++;
         });
         if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value)
             ? `${shown} shown`
             : "";
+    };
+    const writeClipboard = async (body) => {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(body);
+                return;
+            }
+        } catch (_) {}
+        const ta = document.createElement("textarea");
+        ta.value = body;
+        ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+        document.body.append(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand("copy");
+        ta.remove();
+        if (!ok) throw new Error("copy");
+    };
+    const copyResetTimers = new WeakMap();
+    const setBtnLabel = (btn, text) => {
+        const label = btn.querySelector("[data-copy-label]");
+        if (label) label.textContent = text;
+        else btn.textContent = text;
+    };
+    const markCopied = (btn, idleLabel, okLabel, msg) => {
+        if (btn) {
+            const prev = copyResetTimers.get(btn);
+            if (prev) clearTimeout(prev);
+            btn.dataset.copied = "1";
+            btn.classList.remove("is-press");
+            void btn.offsetWidth;
+            btn.classList.add("is-press");
+            setBtnLabel(btn, okLabel);
+            copyResetTimers.set(btn, setTimeout(() => {
+                btn.dataset.copied = "0";
+                btn.classList.remove("is-press");
+                setBtnLabel(btn, idleLabel);
+            }, 1800));
+        }
+        setStatus(msg);
+        setTimeout(() => setStatus(""), 1800);
     };
     const copyText = async (mode) => {
         const cues = visibleCues();
@@ -247,13 +291,15 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         } else {
             body = cues.map((c) => c.text).join("\n");
         }
+        const btn = mode === "md" ? root.querySelector("[data-copy-md]") : root.querySelector("[data-copy]");
+        const idle = mode === "md" ? "Copy Markdown" : "Copy transcript";
         try {
-            await navigator.clipboard.writeText(body);
-            setStatus("Copied.");
+            await writeClipboard(body);
+            markCopied(btn, idle, "Copied!", "Transcript copied to the clipboard.");
         } catch {
             setStatus("Could not copy — select the transcript and copy manually.");
+            setTimeout(() => setStatus(""), 2200);
         }
-        setTimeout(() => setStatus(""), 1800);
     };
     const download = (fmt) => {
         const cues = visibleCues();
@@ -316,8 +362,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         }
         if (playerP) {
             await playerP;
-            try { player?.seekTo(pendingMs / 1000, true); player?.playVideo?.(); } catch (_) {}
-            return;
+            if (player) {
+                try { player.seekTo(pendingMs / 1000, true); player.playVideo?.(); } catch (_) {}
+                return;
+            }
+            playerP = null;
         }
         playerP = (async () => {
             host.innerHTML = `<div id="yt-frame"></div>`;
@@ -440,9 +489,16 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         if (cue) cue.text = text;
         saveEdits();
     });
+    const applyBtn = root.querySelector("[data-apply]");
+    if (applyBtn) applyBtn.hidden = true;
+    root.dataset.ready = "1";
     root.querySelector("[data-play]")?.addEventListener("click", () => mountPlayer(0));
+    const cueFromEvent = (e) => {
+        const el = e.target instanceof Element ? e.target : e.target?.parentElement;
+        return el?.closest?.(".cue");
+    };
     list?.addEventListener("click", (e) => {
-        const a = e.target.closest("a.cue");
+        const a = cueFromEvent(e);
         if (!a) return;
         e.preventDefault();
         if (root.classList.contains("is-editing") && e.target.closest("[data-cue-text]")) return;
@@ -468,6 +524,14 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             return;
         }
         mountPlayer(ms);
+    });
+    list?.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const cue = cueFromEvent(e);
+        if (!cue) return;
+        if (root.classList.contains("is-editing") && e.target.closest("[data-cue-text]")) return;
+        e.preventDefault();
+        cue.click();
     });
     root.querySelector("[data-chapters]")?.addEventListener("click", (e) => {
         const a = e.target.closest("a[data-ms]");
@@ -500,7 +564,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             };
             const body = (prompts[kind] || prompts.summary) + text;
             try {
-                await navigator.clipboard.writeText(body);
+                await writeClipboard(body);
                 setStatus("Prompt copied — paste it into any AI chat.");
             } catch { setStatus("Could not copy the prompt."); }
             setTimeout(() => setStatus(""), 2200);
@@ -548,7 +612,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                     <div class="player-facade" data-player="">
                         <button type="button" class="play-hit" data-play="" aria-label="Play video">
                             <img src={thumb} alt={thumb_alt} width="480" height="360" />
-                            <span class="play-badge">"Play"</span>
+                            <span class="play-badge" aria-hidden="true">"Play"</span>
                         </button>
                     </div>
                     <h1 class="vid-title">{title}</h1>
@@ -564,7 +628,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                         <a class="btn btn-ghost" href={watch} target="_blank" rel="noreferrer noopener">"Open on YouTube"</a>
                     </p>
                     {View::raw(chapters_html)}
-                    {crate::ads::slot("workspace-player", "rectangle")}
+                    {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">
                         <label>
                             "Another video"
@@ -604,45 +668,62 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                     </label>
                     <span class="match-count" data-count=""></span>
                 </div>
-                <div class="toolbar trim-chips">
-                    <span class="prompt-label">"Trim"</span>
-                    <button type="button" class="btn btn-ghost" data-skip-intro="30">"Skip intro 30s"</button>
-                    <button type="button" class="btn btn-ghost" data-skip-intro="60">"Skip intro 60s"</button>
-                    <button type="button" class="btn btn-ghost" data-skip-outro="30">"Skip outro 30s"</button>
-                    <button type="button" class="btn btn-ghost" data-skip-outro="60">"Skip outro 60s"</button>
-                    <button type="button" class="btn btn-ghost" data-pick-range="" aria-pressed="false">"Click two lines"</button>
-                    <button type="button" class="btn btn-ghost" data-clear-trim="">"Clear trim"</button>
+                <fieldset class="tool-group">
+                    <legend>"Trim"</legend>
+                    <div class="toolbar trim-chips">
+                        <button type="button" class="btn btn-ghost" data-skip-intro="30">"Skip intro 30s"</button>
+                        <button type="button" class="btn btn-ghost" data-skip-intro="60">"Skip intro 60s"</button>
+                        <button type="button" class="btn btn-ghost" data-skip-outro="30">"Skip outro 30s"</button>
+                        <button type="button" class="btn btn-ghost" data-skip-outro="60">"Skip outro 60s"</button>
+                        <button type="button" class="btn btn-ghost" data-pick-range="" aria-pressed="false">"Click two lines"</button>
+                        <button type="button" class="btn btn-ghost" data-clear-trim="">"Clear trim"</button>
+                    </div>
+                    <div class="toolbar toolbar-range">
+                        <label>
+                            "Skip from (s)"
+                            <input type="number" data-from="" min="0" max={max_trim.clone()} step="1" inputmode="numeric" placeholder="0" />
+                        </label>
+                        <label>
+                            "to (s)"
+                            <input type="number" data-to="" min="0" max={max_trim} step="1" inputmode="numeric" placeholder="end" />
+                        </label>
+                    </div>
+                </fieldset>
+                <div class="toolbar toolbar-copy">
+                    <button type="button" class="btn btn-primary btn-copy" data-copy="">
+                        <span class="btn-copy-icon" aria-hidden="true"></span>
+                        <span data-copy-label="">"Copy transcript"</span>
+                        <span class="btn-copy-burst" aria-hidden="true"></span>
+                    </button>
+                    <div class="toolbar-copy-more">
+                        <label class="check">
+                            <input type="checkbox" data-stamps="" />
+                            <span>"Timestamps"</span>
+                        </label>
+                        <button type="button" class="btn btn-ghost" data-copy-md="">"Copy Markdown"</button>
+                        <button type="button" class="btn btn-ghost" data-edit="" aria-pressed="false">"Edit"</button>
+                    </div>
                 </div>
-                <div class="toolbar toolbar-actions">
-                    <label class="check">
-                        <input type="checkbox" data-stamps="" />
-                        <span>"Timestamps"</span>
-                    </label>
-                    <label>
-                        "Skip from (s)"
-                        <input type="number" data-from="" min="0" max={max_trim.clone()} step="1" inputmode="numeric" placeholder="0" />
-                    </label>
-                    <label>
-                        "to (s)"
-                        <input type="number" data-to="" min="0" max={max_trim} step="1" inputmode="numeric" placeholder="end" />
-                    </label>
-                    <button type="button" class="btn btn-ghost" data-edit="" aria-pressed="false">"Edit"</button>
-                    <button type="button" class="btn btn-primary" data-copy="">"Copy"</button>
-                    <button type="button" class="btn btn-ghost" data-copy-md="">"Copy Markdown"</button>
-                    <button type="button" class="btn btn-ghost" data-dl="txt">"TXT"</button>
-                    <button type="button" class="btn btn-ghost" data-dl="srt">"SRT"</button>
-                    <button type="button" class="btn btn-ghost" data-dl="vtt">"VTT"</button>
-                    <button type="button" class="btn btn-ghost" data-dl="md">"MD"</button>
-                    <button type="button" class="btn btn-ghost" data-dl="json">"JSON"</button>
-                </div>
-                <div class="toolbar prompts">
-                    <span class="prompt-label">"AI prompts"</span>
-                    <button type="button" class="btn btn-ghost" data-prompt="summary">"Summary"</button>
-                    <button type="button" class="btn btn-ghost" data-prompt="notes">"Notes"</button>
-                    <button type="button" class="btn btn-ghost" data-prompt="quiz">"Quiz"</button>
-                    <button type="button" class="btn btn-ghost" data-prompt="quotes">"Quotes"</button>
-                </div>
-                <p class="hint" data-status="" hidden="" role="status" aria-live="polite"></p>
+                <p class="copy-status hint" data-status="" hidden="" role="status" aria-live="polite"></p>
+                <fieldset class="tool-group">
+                    <legend>"Download"</legend>
+                    <div class="toolbar toolbar-exports">
+                        <button type="button" class="btn btn-ghost" data-dl="txt">"TXT"</button>
+                        <button type="button" class="btn btn-ghost" data-dl="srt">"SRT"</button>
+                        <button type="button" class="btn btn-ghost" data-dl="vtt">"VTT"</button>
+                        <button type="button" class="btn btn-ghost" data-dl="md">"MD"</button>
+                        <button type="button" class="btn btn-ghost" data-dl="json">"JSON"</button>
+                    </div>
+                </fieldset>
+                <fieldset class="tool-group">
+                    <legend>"AI prompts"</legend>
+                    <div class="toolbar prompts">
+                        <button type="button" class="btn btn-ghost" data-prompt="summary">"Summary"</button>
+                        <button type="button" class="btn btn-ghost" data-prompt="notes">"Notes"</button>
+                        <button type="button" class="btn btn-ghost" data-prompt="quiz">"Quiz"</button>
+                        <button type="button" class="btn btn-ghost" data-prompt="quotes">"Quotes"</button>
+                    </div>
+                </fieldset>
                 {crate::ads::slot("workspace-cues", "infeed")}
                 {View::raw(cues_html)}
             </section>
@@ -650,19 +731,14 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     }
 }
 
-fn render_cues(video_id: &str, cues: &[Cue]) -> String {
+fn render_cues(cues: &[Cue]) -> String {
     let mut s = String::from(r#"<div class="cues" data-cues="">"#);
     for cue in cues {
-        let href = format!(
-            "https://www.youtube.com/watch?v={video_id}&t={}s",
-            cue.start_ms / 1000
-        );
         let clock = format_clock(cue.start_ms, false);
         s.push_str(&format!(
-            r#"<a class="cue" data-ms="{ms}" data-text="{text_attr}" href="{href}" rel="noreferrer noopener"><time>{clock}</time><span data-cue-text="">{text}</span></a>"#,
+            r#"<div class="cue" data-ms="{ms}" data-text="{text_attr}" role="button" tabindex="0"><time>{clock}</time><span data-cue-text="">{text}</span></div>"#,
             ms = cue.start_ms,
             text_attr = html_escape::encode_double_quoted_attribute(&cue.text),
-            href = html_escape::encode_double_quoted_attribute(&href),
             clock = html_escape::encode_text(&clock),
             text = html_escape::encode_text(&cue.text),
         ));

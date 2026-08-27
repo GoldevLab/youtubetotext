@@ -62,12 +62,8 @@ pub fn page(_req: FlowRequest) -> View {
                         <p>"Copy a ready-made summary, notes, quiz, or quotes prompt with the transcript. Paste it into the model you already use."</p>
                     </li>
                     <li>
-                        <h3>"No extension required"</h3>
-                        <p>"Paste a link in the browser. An optional extension exists only if YouTube later blocks our servers."</p>
-                    </li>
-                    <li>
-                        <h3>"A free API"</h3>
-                        <p>"curl a JSON/SRT YouTube transcript. No key for light use. Built in Rust — one binary, no Node scrape farm."</p>
+                        <h3>"No install"</h3>
+                        <p>"Paste a link in the browser. Search, copy, download, and share the transcript from one page."</p>
                     </li>
                 </ul>
             </section>
@@ -99,11 +95,7 @@ pub fn page(_req: FlowRequest) -> View {
                     </details>
                     <details>
                         <summary>"Is there a limit to the number of transcripts I can generate?"</summary>
-                        <p>"No account means no quota UI. Use it reasonably. Heavy bulk jobs should use the API and back off on errors."</p>
-                    </details>
-                    <details>
-                        <summary>"Do you offer a YouTube transcript API?"</summary>
-                        <p>"Yes. " <NavLink href="/api">"Free HTTP API"</NavLink> " — " <code>"GET /api/transcript?v=VIDEO_ID&fmt=json"</code> ". Formats: json, txt, srt, vtt, md. No key for light use."</p>
+                        <p>"No account means no quota UI. Use it reasonably."</p>
                     </details>
                 </div>
             </section>

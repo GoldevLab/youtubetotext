@@ -64,13 +64,10 @@ fn fail_view(message: String, retry: String, vid: String, lang: String, tlang: S
                     <div class="rescue">
                         <h2>"This network is blocked — not the video"</h2>
                         <p>
-                            "Sites like YouTubeToTranscript work without an extension because "
-                            <em>"their server"</em>
-                            " talks to YouTube. This computer’s IP is rate-limited. Deploy YouTubeToText (Fly) and paste the link in the browser — no install. The extension is only a backup if cloud IPs get blocked too."
+                            "This computer’s IP is rate-limited talking to YouTube. Try again in a bit, or paste the link from another network — no install."
                         </p>
                         <p class="error-actions">
                             <NavLink href={retry.clone()} class="btn btn-primary">"Try the server again"</NavLink>
-                            <NavLink href="/extension" class="btn btn-ghost">"Optional: browser backup"</NavLink>
                             <NavLink href="/" class="btn btn-ghost">"Another video"</NavLink>
                         </p>
                     </div>

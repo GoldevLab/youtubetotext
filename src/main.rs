@@ -42,8 +42,6 @@ fn chrome(body: View) -> View {
                     </NavLink>
                     <nav class="nav" data-r-nav-exclusive="">
                         <NavLink href="/" class="nav-link" activeClass="is-active" exact=true>"Transcript"</NavLink>
-                        <NavLink href="/extension" class="nav-link" activeClass="is-active" exact=true>"Extension"</NavLink>
-                        <NavLink href="/api" class="nav-link" activeClass="is-active" exact=true>"API"</NavLink>
                     </nav>
                     <span class="nav-progress" aria-hidden="true"></span>
                 </div>
@@ -127,8 +125,8 @@ fn seo_kit() -> SeoKit {
         )
         .with_llms_summary(
             "YouTubeToText turns a YouTube URL into a searchable, downloadable transcript. \
-             Copy as text or Markdown, export SRT/VTT/JSON, translate captions, trim \
-             sections, and fetch the same data from a free HTTP API. No account.",
+             Copy as text or Markdown, export SRT/VTT/JSON, translate captions, and trim \
+             sections. No account.",
         )
         .with_default_json_ld()
         .push_json_ld(json!({
@@ -177,29 +175,15 @@ fn seo_kit() -> SeoKit {
                         "@type": "Answer",
                         "text": "If YouTube has captions for a public video, YouTubeToText can load them. There is no extra length cap on our side."
                     }
-                },
-                {
-                    "@type": "Question",
-                    "name": "Do you offer a YouTube transcript API?",
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": "Yes. GET /api/transcript?v=VIDEO_ID&fmt=json|txt|srt|vtt|md with optional lang and tlang. No API key for light use."
-                    }
                 }
             ]
         }));
     kit.theme_color = Some("#FF0000".into());
     kit.author = "YouTubeToText".into();
-    kit.llms_sections = vec![
-        (
-            "How to use".into(),
-            "Open / with a YouTube URL, or go to /v/{videoId}. Optional query: lang, tlang.".into(),
-        ),
-        (
-            "API".into(),
-            "GET /api/transcript?v=VIDEO_ID&fmt=json|txt|srt|vtt|md&lang=&tlang=".into(),
-        ),
-    ];
+    kit.llms_sections = vec![(
+        "How to use".into(),
+        "Open / with a YouTube URL, or go to /v/{videoId}. Optional query: lang, tlang.".into(),
+    )];
     kit
 }
 

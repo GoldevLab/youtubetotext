@@ -14,7 +14,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   const url = tab?.url || "";
   const id = videoIdFromUrl(url);
   if (!id) {
-    await chrome.tabs.create({ url: `${SITE}/extension` });
+    await chrome.tabs.create({ url: `${SITE}/` });
     return;
   }
   try {
