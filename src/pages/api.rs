@@ -12,18 +12,20 @@ pub fn page(_req: FlowRequest) -> View {
 {r#"curl "https://youtubetotext.fly.dev/api/transcript?v=dQw4w9WgXcQ&fmt=json""#}
             </code></pre>
             <h2>"Query"</h2>
-            <table class="api-table">
-                <thead>
-                    <tr><th>"Param"</th><th>"What it does"</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>"v"</code></td><td>"Video id or YouTube URL"</td></tr>
-                    <tr><td><code>"url"</code></td><td>"Same as v (alias)"</td></tr>
-                    <tr><td><code>"lang"</code></td><td>"Caption track, e.g. en, es, ja"</td></tr>
-                    <tr><td><code>"tlang"</code></td><td>"Translate into this language via YouTube"</td></tr>
-                    <tr><td><code>"fmt"</code></td><td>"json (default), txt, timed, srt, vtt, md"</td></tr>
-                </tbody>
-            </table>
+            <div class="table-scroll">
+                <table class="api-table">
+                    <thead>
+                        <tr><th>"Param"</th><th>"What it does"</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>"v"</code></td><td>"Video id or YouTube URL"</td></tr>
+                        <tr><td><code>"url"</code></td><td>"Same as v (alias)"</td></tr>
+                        <tr><td><code>"lang"</code></td><td>"Caption track, e.g. en, es, ja"</td></tr>
+                        <tr><td><code>"tlang"</code></td><td>"Translate into this language via YouTube"</td></tr>
+                        <tr><td><code>"fmt"</code></td><td>"json (default), txt, timed, srt, vtt, md"</td></tr>
+                    </tbody>
+                </table>
+            </div>
             <h2>"Examples"</h2>
             <pre class="code-block"><code>
 {r#"curl "https://youtubetotext.fly.dev/api/transcript?v=dQw4w9WgXcQ&fmt=srt" -o video.srt

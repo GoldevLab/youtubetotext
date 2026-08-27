@@ -3,14 +3,14 @@
   margin: 0.5rem 0;
   padding: 0.55rem 1rem;
   border: 0;
-  border-radius: 999px;
-  font: 600 14px/1.2 system-ui, sans-serif;
-  color: #fffaf2;
-  background: #c45c26;
+  border-radius: 18px;
+  font: 500 14px/1.2 Roboto, system-ui, sans-serif;
+  color: #ffffff;
+  background: #ff0000;
   cursor: pointer;
 }
 #ytt-yt-btn:hover {
-  background: #9a4318;
+  background: #cc0000;
 }
 #ytt-yt-btn:disabled {
   opacity: 0.7;

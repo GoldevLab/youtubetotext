@@ -14,30 +14,29 @@ pub fn page(_req: FlowRequest) -> View {
                     </p>
                     {home_search()}
                 </div>
-                <aside class="hero-aside">
-                    {crate::ads::slot("home-hero", "rectangle")}
-                </aside>
             </section>
+
+            {crate::ads::slot("home-hero", "infeed")}
 
             <section class="howto" aria-labelledby="howto-title">
                 <h2 id="howto-title">"How to get a YouTube transcript"</h2>
                 <ol class="howto-grid">
                     <li>
-                        <h3>"1. Paste the link"</h3>
+                        <h3>"Paste the link"</h3>
                         <p>"Watch, Shorts, youtu.be, or a bare video id. You land on a shareable page at " <code>"/v/{id}"</code> "."</p>
                     </li>
                     <li>
-                        <h3>"2. Trim and pick language"</h3>
+                        <h3>"Trim and pick language"</h3>
                         <p>"Skip intros and outros, click two lines to set a range, or switch captions. The language you pick stays in the URL."</p>
                     </li>
                     <li>
-                        <h3>"3. Copy, download, or prompt"</h3>
+                        <h3>"Copy, download, or prompt"</h3>
                         <p>"Fix typos in Edit, download SRT/VTT/Markdown, or copy a summary, notes, quiz, or quotes prompt."</p>
                     </li>
                 </ol>
             </section>
 
-            {crate::ads::slot("home-mid", "rectangle")}
+            {crate::ads::slot("home-mid", "infeed")}
 
             <section class="features" aria-labelledby="why-title">
                 <h2 id="why-title">"Why YouTubeToText instead of the usual transcript sites"</h2>

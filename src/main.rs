@@ -37,7 +37,7 @@ fn chrome(body: View) -> View {
             <header class="site-header">
                 <div class="header-inner">
                     <NavLink href="/" class="brand" activeClass="is-active" exact=true>
-                        <span class="brand-mark" aria-hidden="true"></span>
+                        <span class="brand-mark" aria-hidden="true">"Tt"</span>
                         <span class="brand-name">"YouTubeToText"</span>
                     </NavLink>
                     <nav class="nav" data-r-nav-exclusive="">
@@ -112,7 +112,7 @@ fn not_found() -> View {
 const HEAD: &str = r##"
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
 <meta property="og:title" content="YouTube Transcript — Free YouTube to Text, SRT & VTT | YouTubeToText" />
 <meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT/VTT/Markdown, translate. No cookie wall, no account." />
 <meta property="og:type" content="website" />
@@ -188,7 +188,7 @@ fn seo_kit() -> SeoKit {
                 }
             ]
         }));
-    kit.theme_color = Some("#c45c26".into());
+    kit.theme_color = Some("#FF0000".into());
     kit.author = "YouTubeToText".into();
     kit.llms_sections = vec![
         (
