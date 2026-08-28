@@ -104,10 +104,114 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     visible_task!(
         r##"
 (async (state, __resuma) => {
-    const root = document.getElementById("ytt-ws");
+    const liveWorkspace = () =>
+        document.querySelector("#resuma-root #ytt-ws") || document.getElementById("ytt-ws");
+    const fmtClock = (ms) => {
+        const s = Math.floor(ms / 1000);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return h ? `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
+                 : `${m}:${String(sec).padStart(2,"0")}`;
+    };
+    const copyViaExec = (body) => {
+        const ta = document.createElement("textarea");
+        ta.value = body;
+        ta.setAttribute("readonly", "");
+        ta.setAttribute("aria-hidden", "true");
+        ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (_) {}
+        ta.remove();
+        return ok;
+    };
+    const writeClipboard = (body) => {
+        if (copyViaExec(body)) return Promise.resolve();
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(body);
+        return Promise.reject(new Error("copy"));
+    };
+    const cuesFromWorkspace = (ws) => {
+        const q = (ws?.querySelector("[data-search]")?.value || "").trim().toLowerCase();
+        const from = Math.max(0, Number(ws?.querySelector("[data-from]")?.value || 0) * 1000);
+        const toRaw = Number(ws?.querySelector("[data-to]")?.value || 0);
+        const to = toRaw > 0 ? toRaw * 1000 : Infinity;
+        const out = [];
+        ws?.querySelectorAll(".cue").forEach((el) => {
+            if (el.hidden) return;
+            const ms = Number(el.dataset.ms || 0);
+            if (ms < from || ms > to) return;
+            const text = el.querySelector("[data-cue-text]")?.textContent ?? el.dataset.text ?? "";
+            if (q && !String(text).toLowerCase().includes(q)) return;
+            out.push({ start_ms: ms, text });
+        });
+        return out;
+    };
+    const flashCopied = (btn, idle) => {
+        if (!btn) return;
+        const label = btn.querySelector("[data-copy-label]");
+        btn.dataset.copied = "1";
+        btn.classList.remove("is-press");
+        void btn.offsetWidth;
+        btn.classList.add("is-press");
+        if (label) label.textContent = "Copied!";
+        else btn.textContent = "Copied!";
+        clearTimeout(btn._yttCopyTimer);
+        btn._yttCopyTimer = setTimeout(() => {
+            btn.dataset.copied = "0";
+            btn.classList.remove("is-press");
+            if (label) label.textContent = idle;
+            else btn.textContent = idle;
+        }, 1800);
+    };
+    const setWsStatus = (ws, t, ms) => {
+        const status = ws?.querySelector("[data-status]");
+        if (status) { status.textContent = t || ""; status.hidden = !t; }
+        if (t) setTimeout(() => { if (status && status.textContent === t) { status.textContent = ""; status.hidden = true; } }, ms || 1800);
+    };
+    if (!window.__yttCopyBound) {
+        window.__yttCopyBound = true;
+        document.addEventListener("click", (e) => {
+            const t = e.target instanceof Element ? e.target : e.target?.parentElement;
+            if (!t) return;
+            const copyBtn = t.closest("[data-copy]");
+            const mdBtn = t.closest("[data-copy-md]");
+            if (!copyBtn && !mdBtn) return;
+            const ws = t.closest("#ytt-ws") || liveWorkspace();
+            if (!ws) return;
+            e.preventDefault();
+            const md = !!mdBtn;
+            const btn = mdBtn || copyBtn;
+            const cues = cuesFromWorkspace(ws);
+            if (!cues.length) {
+                setWsStatus(ws, "Nothing to copy — clear the search or widen the time range.", 2200);
+                return;
+            }
+            const id = ws.dataset.vid || "";
+            const stamps = ws.querySelector("[data-stamps]")?.checked;
+            let body = "";
+            if (md) {
+                body = cues.map((c) => `- [${fmtClock(c.start_ms)}](https://www.youtube.com/watch?v=${id}&t=${Math.floor(c.start_ms/1000)}s) ${c.text}`).join("\n");
+            } else if (stamps) {
+                body = cues.map((c) => `[${fmtClock(c.start_ms)}] ${c.text}`).join("\n");
+            } else {
+                body = cues.map((c) => c.text).join("\n");
+            }
+            Promise.resolve(writeClipboard(body)).then(() => {
+                flashCopied(btn, md ? "Copy Markdown" : "Copy transcript");
+                setWsStatus(ws, "Transcript copied to the clipboard.", 1800);
+            }).catch(() => {
+                setWsStatus(ws, "Could not copy — select the transcript and copy manually.", 2200);
+            });
+        }, true);
+    }
+    const root = liveWorkspace();
     if (!root || root.dataset.ready === "1") return;
     root.dataset.ready = "1";
-    const dataEl = document.getElementById("ytt-data");
+    const dataEl = root.querySelector("#ytt-data") || document.getElementById("ytt-data");
     let data = { video_id: root.dataset.vid, title: "", author: "", cues: [] };
     try { data = JSON.parse(dataEl?.textContent || "{}"); } catch (_) {}
     try {
@@ -184,14 +288,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     applyStoredEdits();
 
     const setStatus = (t) => { if (status) { status.textContent = t || ""; status.hidden = !t; } };
-    const fmtClock = (ms) => {
-        const s = Math.floor(ms / 1000);
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        return h ? `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
-                 : `${m}:${String(sec).padStart(2,"0")}`;
-    };
     const durationMs = () => {
         const secs = Number(root.dataset.duration || 0);
         if (secs > 0) return secs * 1000;
@@ -232,74 +328,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
         if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value)
             ? `${shown} shown`
             : "";
-    };
-    const writeClipboard = async (body) => {
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(body);
-                return;
-            }
-        } catch (_) {}
-        const ta = document.createElement("textarea");
-        ta.value = body;
-        ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
-        document.body.append(ta);
-        ta.focus();
-        ta.select();
-        ta.setSelectionRange(0, ta.value.length);
-        const ok = document.execCommand("copy");
-        ta.remove();
-        if (!ok) throw new Error("copy");
-    };
-    const copyResetTimers = new WeakMap();
-    const setBtnLabel = (btn, text) => {
-        const label = btn.querySelector("[data-copy-label]");
-        if (label) label.textContent = text;
-        else btn.textContent = text;
-    };
-    const markCopied = (btn, idleLabel, okLabel, msg) => {
-        if (btn) {
-            const prev = copyResetTimers.get(btn);
-            if (prev) clearTimeout(prev);
-            btn.dataset.copied = "1";
-            btn.classList.remove("is-press");
-            void btn.offsetWidth;
-            btn.classList.add("is-press");
-            setBtnLabel(btn, okLabel);
-            copyResetTimers.set(btn, setTimeout(() => {
-                btn.dataset.copied = "0";
-                btn.classList.remove("is-press");
-                setBtnLabel(btn, idleLabel);
-            }, 1800));
-        }
-        setStatus(msg);
-        setTimeout(() => setStatus(""), 1800);
-    };
-    const copyText = async (mode) => {
-        const cues = visibleCues();
-        if (!cues.length) {
-            setStatus("Nothing to copy — clear the search or widen the time range.");
-            setTimeout(() => setStatus(""), 2200);
-            return;
-        }
-        const id = data.video_id;
-        let body = "";
-        if (mode === "md") {
-            body = cues.map((c) => `- [${fmtClock(c.start_ms)}](https://www.youtube.com/watch?v=${id}&t=${Math.floor(c.start_ms/1000)}s) ${c.text}`).join("\n");
-        } else if (mode === "timed" || stamps?.checked) {
-            body = cues.map((c) => `[${fmtClock(c.start_ms)}] ${c.text}`).join("\n");
-        } else {
-            body = cues.map((c) => c.text).join("\n");
-        }
-        const btn = mode === "md" ? root.querySelector("[data-copy-md]") : root.querySelector("[data-copy]");
-        const idle = mode === "md" ? "Copy Markdown" : "Copy transcript";
-        try {
-            await writeClipboard(body);
-            markCopied(btn, idle, "Copied!", "Transcript copied to the clipboard.");
-        } catch {
-            setStatus("Could not copy — select the transcript and copy manually.");
-            setTimeout(() => setStatus(""), 2200);
-        }
     };
     const download = (fmt) => {
         const cues = visibleCues();
@@ -542,8 +570,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     search?.addEventListener("input", applyFilters);
     fromInp?.addEventListener("input", applyFilters);
     toInp?.addEventListener("input", applyFilters);
-    root.querySelector("[data-copy]")?.addEventListener("click", () => copyText(stamps?.checked ? "timed" : "plain"));
-    root.querySelector("[data-copy-md]")?.addEventListener("click", () => copyText("md"));
     root.querySelectorAll("[data-dl]").forEach((btn) => {
         btn.addEventListener("click", () => download(btn.getAttribute("data-dl")));
     });

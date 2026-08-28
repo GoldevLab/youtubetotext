@@ -66,7 +66,7 @@ fn chrome(body: View) -> View {
 #[layout("/")]
 fn RootLayout() -> View {
     visible_task!(
-        r#"
+        r##"
         async (_state, __resuma) => {
             const onNav = () => {
                 document.documentElement.classList.remove("is-navigating");
@@ -83,12 +83,109 @@ fn RootLayout() -> View {
             };
             document.addEventListener("resuma:navigate", onNav);
             document.addEventListener("click", onClick, true);
+            if (!window.__yttCopyBound) {
+                window.__yttCopyBound = true;
+                const clock = (ms) => {
+                    const s = Math.floor(ms / 1000);
+                    const h = Math.floor(s / 3600);
+                    const m = Math.floor((s % 3600) / 60);
+                    const sec = s % 60;
+                    return h ? h + ":" + String(m).padStart(2,"0") + ":" + String(sec).padStart(2,"0")
+                             : m + ":" + String(sec).padStart(2,"0");
+                };
+                const execCopy = (body) => {
+                    const ta = document.createElement("textarea");
+                    ta.value = body;
+                    ta.setAttribute("readonly", "");
+                    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    ta.setSelectionRange(0, ta.value.length);
+                    let ok = false;
+                    try { ok = document.execCommand("copy"); } catch (_) {}
+                    ta.remove();
+                    return ok;
+                };
+                document.addEventListener("click", (e) => {
+                    const t = e.target instanceof Element ? e.target : e.target && e.target.parentElement;
+                    if (!t || !t.closest) return;
+                    const copyBtn = t.closest("[data-copy]");
+                    const mdBtn = t.closest("[data-copy-md]");
+                    if (!copyBtn && !mdBtn) return;
+                    const ws = t.closest("#ytt-ws") || document.querySelector("#resuma-root #ytt-ws");
+                    if (!ws) return;
+                    e.preventDefault();
+                    const md = !!mdBtn;
+                    const btn = mdBtn || copyBtn;
+                    const q = (ws.querySelector("[data-search]") && ws.querySelector("[data-search]").value || "").trim().toLowerCase();
+                    const from = Math.max(0, Number((ws.querySelector("[data-from]") || {}).value || 0) * 1000);
+                    const toRaw = Number((ws.querySelector("[data-to]") || {}).value || 0);
+                    const to = toRaw > 0 ? toRaw * 1000 : Infinity;
+                    const cues = [];
+                    ws.querySelectorAll(".cue").forEach((el) => {
+                        if (el.hidden) return;
+                        const ms = Number(el.dataset.ms || 0);
+                        if (ms < from || ms > to) return;
+                        const text = (el.querySelector("[data-cue-text]") && el.querySelector("[data-cue-text]").textContent) || el.dataset.text || "";
+                        if (q && !String(text).toLowerCase().includes(q)) return;
+                        cues.push({ start_ms: ms, text: text });
+                    });
+                    const status = ws.querySelector("[data-status]");
+                    const setStatus = (msg, wait) => {
+                        if (!status) return;
+                        status.textContent = msg || "";
+                        status.hidden = !msg;
+                        if (msg) setTimeout(() => { if (status.textContent === msg) { status.textContent = ""; status.hidden = true; } }, wait || 1800);
+                    };
+                    if (!cues.length) {
+                        setStatus("Nothing to copy - clear the search or widen the time range.", 2200);
+                        return;
+                    }
+                    const id = ws.dataset.vid || "";
+                    const stamps = ws.querySelector("[data-stamps]") && ws.querySelector("[data-stamps]").checked;
+                    let body = "";
+                    if (md) {
+                        body = cues.map((c) => "- [" + clock(c.start_ms) + "](https://www.youtube.com/watch?v=" + id + "&t=" + Math.floor(c.start_ms/1000) + "s) " + c.text).join("\n");
+                    } else if (stamps) {
+                        body = cues.map((c) => "[" + clock(c.start_ms) + "] " + c.text).join("\n");
+                    } else {
+                        body = cues.map((c) => c.text).join("\n");
+                    }
+                    const done = () => {
+                        const label = btn.querySelector("[data-copy-label]");
+                        const idle = md ? "Copy Markdown" : "Copy transcript";
+                        btn.dataset.copied = "1";
+                        btn.classList.remove("is-press");
+                        void btn.offsetWidth;
+                        btn.classList.add("is-press");
+                        if (label) label.textContent = "Copied!";
+                        else btn.textContent = "Copied!";
+                        clearTimeout(btn._yttCopyTimer);
+                        btn._yttCopyTimer = setTimeout(() => {
+                            btn.dataset.copied = "0";
+                            btn.classList.remove("is-press");
+                            if (label) label.textContent = idle;
+                            else btn.textContent = idle;
+                        }, 1800);
+                        setStatus("Transcript copied to the clipboard.", 1800);
+                    };
+                    if (execCopy(body)) done();
+                    else if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(body).then(done).catch(() => {
+                            setStatus("Could not copy - select the transcript and copy manually.", 2200);
+                        });
+                    } else {
+                        setStatus("Could not copy - select the transcript and copy manually.", 2200);
+                    }
+                }, true);
+            }
             return () => {
                 document.removeEventListener("resuma:navigate", onNav);
                 document.removeEventListener("click", onClick, true);
             };
         }
-    "#
+    "##
     );
 
     chrome(view! { <Slot /> })

@@ -985,10 +985,6 @@ select:focus-visible {
     animation: copy-icon-pop 0.45s var(--copy-spring);
   }
 
-  @view-transition {
-    navigation: auto;
-  }
-
   ::view-transition-old(root) {
     animation: ytt-vt-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
   }
