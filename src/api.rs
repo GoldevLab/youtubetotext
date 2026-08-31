@@ -10,8 +10,8 @@ use serde::Deserialize;
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
 use crate::parse::parse_video_id;
 use crate::youtube::{
-    download_audio, download_video, ingest_client_doc, load_transcript, normalize_video_quality,
-    translate_cue_texts, Cue,
+    download_audio, download_video, ingest_client_doc, load_transcript, normalize_audio_format,
+    normalize_video_quality, translate_cue_texts, Cue,
 };
 use crate::guard;
 
@@ -125,9 +125,10 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
         )
         .into_response();
     };
-    match download_audio(&id).await {
+    let fmt = normalize_audio_format(q.fmt.as_deref());
+    match download_audio(&id, fmt).await {
         Ok((pick, len, stream)) => {
-            let filename = safe_audio_name(&pick.title, &id, &pick.ext);
+            let filename = safe_audio_name(&format!("{}-{fmt}", pick.title), &id, &pick.ext);
             let mut builder = Response::builder().status(StatusCode::OK);
             let mime = if pick.mime.is_empty() {
                 "application/octet-stream"

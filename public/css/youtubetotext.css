@@ -370,6 +370,10 @@ h3 {
   margin-top: 0.7rem;
 }
 
+.hero-dl + .hero-dl {
+  margin-top: 0.55rem;
+}
+
 .hero-dl .btn {
   flex: 1 1 9.5rem;
   justify-content: center;
@@ -567,7 +571,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  width: 4.6rem;
+  width: 5.1rem;
   height: 1.5rem;
   min-height: 0;
   margin: 0;

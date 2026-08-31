@@ -2012,7 +2012,11 @@ async fn stream_ytdlp(
         )
     })?;
     let url = format!("https://www.youtube.com/watch?v={video_id}");
-    let mut child = tokio::process::Command::new(bin)
+    let mut cmd = tokio::process::Command::new(bin);
+    if Path::new("/usr/bin/ffmpeg").is_file() {
+        cmd.env("FFMPEG", "/usr/bin/ffmpeg");
+    }
+    let mut child = cmd
         .args([
             "-f",
             format,
@@ -2114,32 +2118,103 @@ pub async fn download_video(
     .await
 }
 
+pub fn normalize_audio_format(raw: Option<&str>) -> &'static str {
+    match raw.unwrap_or("m4a").trim().to_ascii_lowercase().as_str() {
+        "mp3" | "mpeg" => "mp3",
+        "opus" | "webm" | "ogg" => "opus",
+        "wav" => "wav",
+        _ => "m4a",
+    }
+}
+
+fn audio_ytdlp_plan(fmt: &str) -> (&'static str, &'static [&'static str], &'static str, &'static str) {
+    match fmt {
+        "mp3" => (
+            "bestaudio/best",
+            &["-x", "--audio-format", "mp3"],
+            "audio/mpeg",
+            "mp3",
+        ),
+        "opus" => (
+            "bestaudio/best",
+            &["-x", "--audio-format", "opus"],
+            "audio/ogg",
+            "opus",
+        ),
+        "wav" => (
+            "bestaudio/best",
+            &["-x", "--audio-format", "wav"],
+            "audio/wav",
+            "wav",
+        ),
+        _ => (
+            "bestaudio[ext=m4a]/bestaudio/best",
+            &[],
+            "audio/mp4",
+            "m4a",
+        ),
+    }
+}
+
 pub async fn download_audio(
     video_id: &str,
+    fmt: &str,
 ) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
     if !is_id(video_id) {
         return Err(FetchError::new(400, "That is not a YouTube video id."));
     }
-    let picks = load_audio_picks(video_id).await.unwrap_or_default();
-    for pick in &picks {
-        match peek_audio_len(&pick.url, &pick.ua).await {
-            Ok(len) if len > 0 && len <= GV_CHUNK => {
-                return open_audio_stream(&pick.url, &pick.ua)
-                    .await
-                    .map(|(n, s)| (pick.clone(), n, s));
-            }
-            _ => {}
-        }
+    let fmt = normalize_audio_format(Some(fmt));
+    let (spec, extra, mime, ext) = audio_ytdlp_plan(fmt);
+    if !extra.is_empty() && !ffmpeg_available() {
+        return Err(FetchError::new(
+            503,
+            "MP3 and other converted formats need ffmpeg on the server. Try M4A, or wait for the next deploy.",
+        ));
     }
-    let meta = picks
-        .into_iter()
-        .next()
+    if fmt == "m4a" {
+        let picks = load_audio_picks(video_id).await.unwrap_or_default();
+        for pick in &picks {
+            match peek_audio_len(&pick.url, &pick.ua).await {
+                Ok(len) if len > 0 && len <= GV_CHUNK => {
+                    return open_audio_stream(&pick.url, &pick.ua)
+                        .await
+                        .map(|(n, s)| {
+                            let mut p = pick.clone();
+                            p.mime = mime.into();
+                            p.ext = ext.into();
+                            (p, n, s)
+                        });
+                }
+                _ => {}
+            }
+        }
+        let mut meta = picks
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| placeholder_pick(video_id));
+        meta.mime = mime.into();
+        meta.ext = ext.into();
+        return stream_ytdlp(
+            video_id,
+            meta,
+            spec,
+            extra,
+            "Could not start audio download",
+        )
+        .await;
+    }
+    let mut meta = load_audio_picks(video_id)
+        .await
+        .ok()
+        .and_then(|p| p.into_iter().next())
         .unwrap_or_else(|| placeholder_pick(video_id));
+    meta.mime = mime.into();
+    meta.ext = ext.into();
     stream_ytdlp(
         video_id,
         meta,
-        "bestaudio[ext=m4a]/bestaudio/best",
-        &[],
+        spec,
+        extra,
         "Could not start audio download",
     )
     .await
@@ -2423,6 +2498,14 @@ mod tests {
         assert!(muxed.contains("height<=720"));
         let dash = video_ytdlp_format("1080", true);
         assert!(dash.contains("bv*"));
+    }
+
+    #[test]
+    fn audio_format_aliases() {
+        assert_eq!(normalize_audio_format(None), "m4a");
+        assert_eq!(normalize_audio_format(Some("MP3")), "mp3");
+        assert_eq!(normalize_audio_format(Some("webm")), "opus");
+        assert_eq!(audio_ytdlp_plan("mp3").3, "mp3");
     }
 
     #[test]

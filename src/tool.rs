@@ -104,10 +104,11 @@ pub fn home_search(mode: Mode) -> View {
     const syncDlHrefs = () => {
         const id = parseId(input?.value);
         const q = root.querySelector("[data-vq]")?.value || "720";
+        const afmt = root.querySelector("[data-afmt]")?.value || "m4a";
         const video = root.querySelector("[data-home-video]");
         const audio = root.querySelector("[data-home-audio]");
         if (video) video.href = id ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}` : "/api/video";
-        if (audio) audio.href = id ? `/api/audio?v=${encodeURIComponent(id)}` : "/api/audio";
+        if (audio) audio.href = id ? `/api/audio?v=${encodeURIComponent(id)}&fmt=${encodeURIComponent(afmt)}` : "/api/audio";
     };
     const armVideoDialog = (dlg) => {
         if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
@@ -122,11 +123,17 @@ pub fn home_search(mode: Mode) -> View {
             });
         }
     };
-    const startFileDownload = (href, withModal) => {
-        if (withModal) {
-            const dlg = root.querySelector("[data-video-dlg]");
-            armVideoDialog(dlg);
-            if (dlg instanceof HTMLDialogElement && typeof dlg.showModal === "function") dlg.showModal();
+    const startFileDownload = (href, kind) => {
+        const dlg = root.querySelector("[data-dl-dlg]") || root.querySelector("[data-video-dlg]");
+        armVideoDialog(dlg);
+        if (dlg instanceof HTMLDialogElement) {
+            const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
+            const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
+            if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
+            if (lead) lead.textContent = kind === "audio"
+                ? "The file will save to your downloads folder. MP3 conversion can take a moment."
+                : "The file will save to your downloads folder. Higher qualities can take a minute.";
+            if (typeof dlg.showModal === "function") dlg.showModal();
         }
         const a = document.createElement("a");
         a.href = href;
@@ -140,19 +147,20 @@ pub fn home_search(mode: Mode) -> View {
     };
     input?.addEventListener("input", syncDlHrefs);
     root.querySelector("[data-vq]")?.addEventListener("change", syncDlHrefs);
+    root.querySelector("[data-afmt]")?.addEventListener("change", syncDlHrefs);
     root.querySelector("[data-home-video]")?.addEventListener("click", (e) => {
         e.preventDefault();
         const id = needId();
         if (!id) return;
         syncDlHrefs();
-        startFileDownload(root.querySelector("[data-home-video]")?.href || "", true);
+        startFileDownload(root.querySelector("[data-home-video]")?.href || "", "video");
     });
     root.querySelector("[data-home-audio]")?.addEventListener("click", (e) => {
         e.preventDefault();
         const id = needId();
         if (!id) return;
         syncDlHrefs();
-        startFileDownload(root.querySelector("[data-home-audio]")?.href || "", false);
+        startFileDownload(root.querySelector("[data-home-audio]")?.href || "", "audio");
     });
     syncDlHrefs();
     form?.addEventListener("submit", async (e) => {
@@ -252,6 +260,18 @@ pub fn home_search(mode: Mode) -> View {
                 </label>
                 <div class="hero-dl">
                     <label class="media-dl-qwrap">
+                        <span>"Format"</span>
+                        <select class="media-dl-q" data-afmt="" aria-label="Audio format">
+                            <option value="m4a" selected=true>"M4A"</option>
+                            <option value="mp3">"MP3"</option>
+                            <option value="opus">"Opus"</option>
+                            <option value="wav">"WAV"</option>
+                        </select>
+                    </label>
+                    <a class="btn btn-primary" href="/api/audio" download="" data-r-full="" data-home-audio="">"Download audio"</a>
+                </div>
+                <div class="hero-dl">
+                    <label class="media-dl-qwrap">
                         <span>"Quality"</span>
                         <select class="media-dl-q" data-vq="" aria-label="Video quality">
                             <option value="360">"360p"</option>
@@ -262,16 +282,15 @@ pub fn home_search(mode: Mode) -> View {
                         </select>
                     </label>
                     <a class="btn btn-secondary" href="/api/video" download="" data-r-full="" data-home-video="">"Download video"</a>
-                    <a class="btn btn-ghost" href="/api/audio" download="" data-r-full="" data-home-audio="">"Download audio"</a>
                 </div>
                 {ts_block}
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>
                 <p id="url-error" class="hint form-error" data-form-error="" hidden="" role="alert"></p>
             </Form>
             <div class="recents" data-recents="" hidden=""></div>
-            <dialog class="dl-dialog" data-video-dlg="" closedby="any" aria-labelledby="ytt-home-vdl-title">
-                <h2 id="ytt-home-vdl-title">"Your video is downloading"</h2>
-                <p>"The file will save to your downloads folder. Higher qualities can take a minute."</p>
+            <dialog class="dl-dialog" data-dl-dlg="" data-video-dlg="" closedby="any" aria-labelledby="ytt-home-vdl-title">
+                <h2 id="ytt-home-vdl-title" data-dl-title="">"Your file is downloading"</h2>
+                <p data-dl-lead="">"The file will save to your downloads folder."</p>
                 {crate::ads::slot("home-video-dl", "rectangle")}
                 <form method="dialog">
                     <button type="submit" class="btn btn-primary">"Got it"</button>

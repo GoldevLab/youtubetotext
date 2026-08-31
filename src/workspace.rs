@@ -106,7 +106,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         format!("{cue_count} lines · {words} words · ~{read_mins} min read · {duration}")
     };
     let parsed_mode = Mode::parse(&mode);
-    let audio_href = format!("/api/audio?v={video_id}");
+    let audio_href = format!("/api/audio?v={video_id}&fmt=m4a");
     let video_href = format!("/api/video?v={video_id}&q=720");
     let recap = extractive_summary(&doc);
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
@@ -358,42 +358,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         setStatus(ws, `Downloaded ${name}.`);
     };
     const downloadAudio = async (ws, href) => {
-        const btn = ws.querySelector("[data-audio]");
-        const prev = btn?.textContent || "Download audio";
-        if (btn) btn.textContent = "Downloading…";
-        setStatus(ws, "Fetching audio from YouTube…", 20000);
-        try {
-            const r = await fetch(href, { credentials: "same-origin" });
-            const ct = (r.headers.get("content-type") || "").toLowerCase();
-            if (!r.ok || ct.includes("application/json")) {
-                let msg = "YouTube refused the audio stream. Try again in a moment.";
-                try {
-                    const j = await r.json();
-                    msg = j.error || j.message || msg;
-                } catch (_) {}
-                setStatus(ws, msg, 8000);
-                return;
-            }
-            const blob = await r.blob();
-            const cd = r.headers.get("content-disposition") || "";
-            const m = /filename="?([^";]+)"?/i.exec(cd);
-            const name = m ? m[1] : `audio-${ws.dataset.vid || "yt"}.m4a`;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = name;
-            a.rel = "noopener";
-            a.style.display = "none";
-            document.body.append(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
-            setStatus(ws, `Downloaded ${name}.`, 4000);
-        } catch (_) {
-            setStatus(ws, "Audio download failed. Try again.", 8000);
-        } finally {
-            if (btn) btn.textContent = prev;
-        }
+        startMediaDownload(ws, href, "audio");
     };
     const armVideoDialog = (dlg) => {
         if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
@@ -408,11 +373,18 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             });
         }
     };
-    const startVideoDownload = (ws, href) => {
-        const dlg = ws.querySelector("[data-video-dlg]");
+    const startVideoDownload = (ws, href) => startMediaDownload(ws, href, "video");
+    const startMediaDownload = (ws, href, kind) => {
+        const dlg = ws.querySelector("[data-dl-dlg]") || ws.querySelector("[data-video-dlg]");
         armVideoDialog(dlg);
-        if (dlg instanceof HTMLDialogElement && typeof dlg.showModal === "function") {
-            dlg.showModal();
+        if (dlg instanceof HTMLDialogElement) {
+            const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
+            const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
+            if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
+            if (lead) lead.textContent = kind === "audio"
+                ? "The file will save to your downloads folder. MP3 conversion can take a moment."
+                : "The file will save to your downloads folder. Higher qualities can take a minute.";
+            if (typeof dlg.showModal === "function") dlg.showModal();
         }
         const a = document.createElement("a");
         a.href = href;
@@ -904,12 +876,19 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         });
         document.addEventListener("change", (e) => {
             const t = e.target instanceof Element ? e.target : null;
-            const sel = t?.closest("[data-vq]");
+            const sel = t?.closest("[data-vq], [data-afmt]");
             if (!sel || !(sel instanceof HTMLSelectElement)) return;
             const ws = sel.closest("#ytt-ws") || liveWorkspace();
-            const a = ws?.querySelector("[data-video]");
             const vid = ws?.dataset.vid;
-            if (a && vid) a.setAttribute("href", `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(sel.value)}`);
+            if (!ws || !vid) return;
+            if (sel.hasAttribute("data-vq")) {
+                const a = ws.querySelector("[data-video]");
+                if (a) a.setAttribute("href", `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(sel.value)}`);
+            }
+            if (sel.hasAttribute("data-afmt")) {
+                const a = ws.querySelector("[data-audio]");
+                if (a) a.setAttribute("href", `/api/audio?v=${encodeURIComponent(vid)}&fmt=${encodeURIComponent(sel.value)}`);
+            }
         });
         document.addEventListener("submit", (e) => {
             const F = window.__yttForge;
@@ -1012,7 +991,18 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
                     </p>
                     <div class="media-dl">
-                        <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
+                        <div class="media-dl-row">
+                            <label class="media-dl-qwrap">
+                                <span>"Format"</span>
+                                <select class="media-dl-q" data-afmt="" aria-label="Audio format">
+                                    <option value="m4a" selected=true>"M4A"</option>
+                                    <option value="mp3">"MP3"</option>
+                                    <option value="opus">"Opus"</option>
+                                    <option value="wav">"WAV"</option>
+                                </select>
+                            </label>
+                            <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
+                        </div>
                         <div class="media-dl-row">
                             <label class="media-dl-qwrap">
                                 <span>"Quality"</span>
@@ -1027,9 +1017,9 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                             <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download video"</a>
                         </div>
                     </div>
-                    <dialog class="dl-dialog" data-video-dlg="" closedby="any" aria-labelledby="ytt-vdl-title">
-                        <h2 id="ytt-vdl-title">"Your video is downloading"</h2>
-                        <p>"The file will save to your downloads folder. Higher qualities can take a minute."</p>
+                    <dialog class="dl-dialog" data-dl-dlg="" data-video-dlg="" closedby="any" aria-labelledby="ytt-vdl-title">
+                        <h2 id="ytt-vdl-title" data-dl-title="">"Your file is downloading"</h2>
+                        <p data-dl-lead="">"The file will save to your downloads folder."</p>
                         {crate::ads::slot("workspace-video-dl", "rectangle")}
                         <form method="dialog">
                             <button type="submit" class="btn btn-primary">"Got it"</button>
