@@ -290,6 +290,7 @@ h3 {
 }
 
 .hero-form {
+  position: relative;
   background: color-mix(in srgb, var(--bg-elev) 92%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -304,6 +305,15 @@ h3 {
 .hero-form.is-busy {
   opacity: 0.72;
   pointer-events: none;
+}
+
+.hp-field {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .hero-label {
@@ -1307,6 +1317,7 @@ select:focus-visible {
 }
 
 .another-form {
+  position: relative;
   margin-top: 1rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--line);

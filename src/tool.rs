@@ -85,7 +85,12 @@ pub fn home_search(mode: Mode) -> View {
             } catch (_) {}
         });
     }
-    form?.addEventListener("submit", (e) => {
+    form?.addEventListener("submit", async (e) => {
+        const hp = form.querySelector('[name="website"]');
+        if (hp && String(hp.value || "").trim()) {
+            e.preventDefault();
+            return;
+        }
         const id = parseId(input?.value);
         if (!id) {
             e.preventDefault();
@@ -100,6 +105,28 @@ pub fn home_search(mode: Mode) -> View {
         e.preventDefault();
         if (err) err.hidden = true;
         input?.removeAttribute("aria-invalid");
+        if (root.dataset.turnstile === "1") {
+            const token = window.turnstile?.getResponse?.() || form.querySelector('[name="turnstile"]')?.value;
+            if (!token) {
+                if (err) { err.hidden = false; err.textContent = "Confirm you are not a bot, then try again."; }
+                return;
+            }
+            try {
+                const r = await fetch("/api/gate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Accept: "application/json" },
+                    body: JSON.stringify({ token }),
+                });
+                if (!r.ok) {
+                    const data = await r.json().catch(() => ({}));
+                    if (err) { err.hidden = false; err.textContent = data.error || "Confirm you are not a bot, then try again."; }
+                    return;
+                }
+            } catch (_) {
+                if (err) { err.hidden = false; err.textContent = "Confirm you are not a bot, then try again."; }
+                return;
+            }
+        }
         form?.classList.add("is-busy");
         saveRecent(id, id);
         go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(mode));
@@ -108,10 +135,31 @@ pub fn home_search(mode: Mode) -> View {
 "##
     );
 
+    let site = crate::guard::turnstile_site_key().unwrap_or_default();
+    let ts_flag = if site.is_empty() { String::new() } else { "1".into() };
+    let ts_block = if site.is_empty() {
+        View::empty()
+    } else {
+        View::raw(format!(
+            r#"<div class="cf-turnstile" data-sitekey="{}"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>"#,
+            html_escape::encode_double_quoted_attribute(&site)
+        ))
+    };
+
     view! {
-        <div id="ytt-home" data-mode={slug.clone()}>
+        <div id="ytt-home" data-mode={slug.clone()} data-turnstile={ts_flag}>
             <Form submit={crate::actions::open_transcript} class="hero-form">
                 <input type="hidden" name="mode" value={slug} />
+                <input type="hidden" name="turnstile" value="" />
+                <label class="hp-field" aria-hidden="true">
+                    "Company website"
+                    <input
+                        name="website"
+                        type="text"
+                        tabindex="-1"
+                        autocomplete="off"
+                    />
+                </label>
                 <label class="hero-label">
                     "YouTube link"
                     <span class="hero-field">
@@ -130,6 +178,7 @@ pub fn home_search(mode: Mode) -> View {
                         <button type="submit" class="btn btn-primary">{cta}</button>
                     </span>
                 </label>
+                {ts_block}
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>
                 <p id="url-error" class="hint form-error" data-form-error="" hidden="" role="alert"></p>
             </Form>

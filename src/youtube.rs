@@ -200,10 +200,39 @@ pub async fn load_transcript(
         return Ok(hit);
     }
 
-    let doc = fetch_uncached(video_id, lang, tlang).await?;
-    let doc = Arc::new(doc);
-    cache_put(cache_key, doc.clone());
-    Ok(doc)
+    // Already have this video’s source captions (same Fly instance): translate
+    // those lines instead of hitting YouTube timedtext again (often 429).
+    if !tlang_key.is_empty() {
+        if let Some(src) = cache_get_source(video_id, &lang_key) {
+            if let Ok(doc) = translated_from_source(src.as_ref(), &tlang_key).await {
+                let doc = Arc::new(doc);
+                cache_put(cache_key, doc.clone());
+                return Ok(doc);
+            }
+        }
+    }
+
+    match fetch_uncached(video_id, lang, tlang).await {
+        Ok(doc) => {
+            let doc = Arc::new(doc);
+            cache_put(cache_key, doc.clone());
+            Ok(doc)
+        }
+        Err(e) if !tlang_key.is_empty() => {
+            let src = if let Some(cached) = cache_get_source(video_id, &lang_key) {
+                cached
+            } else {
+                Arc::new(fetch_uncached(video_id, lang, None).await?)
+            };
+            let doc = translated_from_source(src.as_ref(), &tlang_key)
+                .await
+                .map_err(|_| e)?;
+            let doc = Arc::new(doc);
+            cache_put(cache_key, doc.clone());
+            Ok(doc)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 async fn fetch_uncached(
@@ -1393,6 +1422,208 @@ fn cache_get(key: &str) -> Option<Arc<TranscriptDoc>> {
         .map(|(_, _, d)| d.clone())
 }
 
+fn cache_get_source(video_id: &str, lang_key: &str) -> Option<Arc<TranscriptDoc>> {
+    if !lang_key.is_empty() {
+        if let Some(hit) = cache_get(&format!("{video_id}|{lang_key}|")) {
+            return Some(hit);
+        }
+    }
+    cache_get(&format!("{video_id}||"))
+}
+
+const CUE_SEP: &str = "\n\u{E000}\n";
+const GTX_URL: &str = "https://translate.googleapis.com/translate_a/single";
+
+/// Translate cue text, keeping start/duration. Used when YouTube tlang is blocked.
+pub async fn translate_cue_texts(
+    mut cues: Vec<Cue>,
+    source_lang: &str,
+    tlang: &str,
+) -> Result<Vec<Cue>, FetchError> {
+    let tl = tlang.trim().to_ascii_lowercase();
+    if tl.is_empty() {
+        return Ok(cues);
+    }
+    let sl = source_lang
+        .trim()
+        .split([':', '|', '-', '_'])
+        .next()
+        .unwrap_or("auto")
+        .to_ascii_lowercase();
+    let sl = if sl.is_empty() || sl == "asr" {
+        "auto"
+    } else {
+        sl.as_str()
+    };
+    if sl != "auto" && sl.eq_ignore_ascii_case(&tl) {
+        return Ok(cues);
+    }
+    if cues.is_empty() {
+        return Ok(cues);
+    }
+    if cues.len() > 25_000 {
+        return Err(FetchError::new(400, "That caption file is too large."));
+    }
+
+    let texts: Vec<String> = cues.iter().map(|c| c.text.clone()).collect();
+    let translated = gtx_lines(sl, &tl, &texts).await?;
+    if translated.len() != cues.len() {
+        return Err(FetchError::new(502, "Translation returned the wrong number of lines."));
+    }
+    for (cue, text) in cues.iter_mut().zip(translated) {
+        cue.text = text;
+    }
+    Ok(cues)
+}
+
+async fn translated_from_source(src: &TranscriptDoc, tlang: &str) -> Result<TranscriptDoc, FetchError> {
+    let cues = translate_cue_texts(src.cues.clone(), &src.track.lang, tlang).await?;
+    let mut track = src.track.clone();
+    let dest = language_name(tlang);
+    if !track.name.contains(&dest) {
+        track.name = format!("{} → {dest}", track.name);
+    }
+    Ok(TranscriptDoc {
+        video_id: src.video_id.clone(),
+        title: src.title.clone(),
+        author: src.author.clone(),
+        channel_id: src.channel_id.clone(),
+        duration_secs: src.duration_secs,
+        track,
+        tracks: src.tracks.clone(),
+        translations: src.translations.clone(),
+        cues,
+        chapters: src.chapters.clone(),
+    })
+}
+
+async fn gtx_lines(sl: &str, tl: &str, lines: &[String]) -> Result<Vec<String>, FetchError> {
+    let mut out = Vec::with_capacity(lines.len());
+    let mut batch: Vec<&str> = Vec::new();
+    let mut batch_chars = 0usize;
+    for line in lines {
+        let extra = line.len() + CUE_SEP.len();
+        if !batch.is_empty() && batch_chars + extra > 450 {
+            out.extend(gtx_batch(sl, tl, &batch).await?);
+            batch.clear();
+            batch_chars = 0;
+        }
+        batch.push(line.as_str());
+        batch_chars += extra;
+    }
+    if !batch.is_empty() {
+        out.extend(gtx_batch(sl, tl, &batch).await?);
+    }
+    Ok(out)
+}
+
+async fn gtx_batch(sl: &str, tl: &str, batch: &[&str]) -> Result<Vec<String>, FetchError> {
+    if batch.len() == 1 {
+        let one = gtx_text(sl, tl, batch[0]).await?;
+        return Ok(vec![one]);
+    }
+    let joined = batch.join(CUE_SEP);
+    let rendered = gtx_text(sl, tl, &joined).await?;
+    let parts: Vec<String> = rendered.split(CUE_SEP).map(|s| s.to_string()).collect();
+    if parts.len() == batch.len() {
+        return Ok(parts);
+    }
+    let mut out = Vec::with_capacity(batch.len());
+    for line in batch {
+        out.push(gtx_text(sl, tl, line).await?);
+    }
+    Ok(out)
+}
+
+async fn gtx_text(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> {
+    if text.trim().is_empty() {
+        return Ok(text.to_string());
+    }
+    match gtx_text_once(sl, tl, text).await {
+        Ok(s) => Ok(s),
+        Err(_) => mymemory_text(sl, tl, text).await,
+    }
+}
+
+async fn gtx_text_once(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> {
+    let resp = HTTP_VR
+        .get(GTX_URL)
+        .query(&[
+            ("client", "gtx"),
+            ("sl", sl),
+            ("tl", tl),
+            ("dt", "t"),
+            ("q", text),
+        ])
+        .header("User-Agent", WEB_UA)
+        .send()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Translation request failed ({e}).")))?;
+    let status = resp.status().as_u16();
+    if status == 429 {
+        return Err(FetchError::new(
+            429,
+            "Translation is rate-limited right now. Try Apply again in a minute.",
+        ));
+    }
+    if status >= 400 {
+        return Err(FetchError::new(status, "Translation request was refused."));
+    }
+    let body = resp
+        .text()
+        .await
+        .map_err(|_| FetchError::new(502, "Translation response could not be read."))?;
+    if body.trim_start().starts_with('<') {
+        return Err(FetchError::new(502, "Translation response was not usable."));
+    }
+    parse_gtx_body(&body).ok_or_else(|| FetchError::new(502, "Translation response was not usable."))
+}
+
+const MYMEMORY_URL: &str = "https://api.mymemory.translated.net/get";
+
+async fn mymemory_text(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> {
+    let pair = format!("{sl}|{tl}");
+    let resp = HTTP_VR
+        .get(MYMEMORY_URL)
+        .query(&[("q", text), ("langpair", pair.as_str())])
+        .header("User-Agent", WEB_UA)
+        .send()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Translation request failed ({e}).")))?;
+    if !resp.status().is_success() {
+        return Err(FetchError::new(
+            resp.status().as_u16(),
+            "Translation request was refused.",
+        ));
+    }
+    let v: Value = resp
+        .json()
+        .await
+        .map_err(|_| FetchError::new(502, "Translation response was not JSON."))?;
+    let status = v.get("responseStatus").and_then(|x| x.as_u64()).unwrap_or(0);
+    let translated = v
+        .pointer("/responseData/translatedText")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .trim();
+    if status != 200 || translated.is_empty() {
+        return Err(FetchError::new(502, "Translation response was not usable."));
+    }
+    Ok(html_escape::decode_html_entities(translated).into_owned())
+}
+
+fn parse_gtx_body(body: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(body.trim()).ok()?;
+    let rows = v.get(0)?.as_array()?;
+    let mut out = String::new();
+    for row in rows {
+        if let Some(s) = row.get(0).and_then(|x| x.as_str()) {
+            out.push_str(s);
+        }
+    }
+    Some(out)
+}
+
 fn cache_put(key: String, doc: Arc<TranscriptDoc>) {
     let mut g = CACHE.lock();
     g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
@@ -1883,5 +2114,32 @@ mod tests {
         .unwrap();
         assert_eq!(doc.cues.len(), 1);
         assert!(cache_get("dQw4w9WgXcQ||").is_some());
+    }
+
+    #[test]
+    fn parse_gtx_concatenates_chunks() {
+        let body = r#"[[["Hello ","Hola",null,null,3],["world","mundo",null,null,3]],null,"es"]"#;
+        assert_eq!(parse_gtx_body(body).as_deref(), Some("Hello world"));
+    }
+
+    #[test]
+    fn cache_get_source_uses_lang_key() {
+        let _ = ingest_client_doc(
+            "dQw4w9WgXcQ".into(),
+            "Song".into(),
+            "Rick".into(),
+            213,
+            "es".into(),
+            "asr".into(),
+            "".into(),
+            vec![Cue {
+                start_ms: 0,
+                duration_ms: 1000,
+                text: "Hola".into(),
+            }],
+        )
+        .unwrap();
+        assert!(cache_get_source("dQw4w9WgXcQ", "es:asr").is_some());
+        assert!(cache_get_source("dQw4w9WgXcQ", "").is_some());
     }
 }

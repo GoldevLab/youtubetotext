@@ -25,6 +25,8 @@ Paste once on `/`. Tools for the same video (audio, translate, summary, SRT) sit
 - Download audio when YouTube exposes a plain audio URL
 - `GET /api/transcript?v=…&fmt=json|txt|srt|vtt|md`
 
+The public API and video loads are rate-limited per IP so scrapers cannot drain YouTube captions through this app. Optional Cloudflare Turnstile: set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` on Fly.
+
 ## Development
 
 ```bash

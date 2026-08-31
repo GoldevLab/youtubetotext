@@ -10,7 +10,8 @@ use serde::Deserialize;
 
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
 use crate::parse::parse_video_id;
-use crate::youtube::{download_audio, ingest_client_doc, load_transcript, Cue};
+use crate::youtube::{download_audio, ingest_client_doc, load_transcript, translate_cue_texts, Cue};
+use crate::guard;
 
 #[derive(Debug, Deserialize)]
 pub struct ApiQuery {
@@ -21,7 +22,10 @@ pub struct ApiQuery {
     pub fmt: Option<String>,
 }
 
-pub async fn transcript(Query(q): Query<ApiQuery>) -> impl IntoResponse {
+pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl IntoResponse {
+    if let Err(m) = guard::check_headers(&headers, guard::API) {
+        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    }
     let raw = q
         .v
         .as_deref()
@@ -100,7 +104,10 @@ pub async fn transcript(Query(q): Query<ApiQuery>) -> impl IntoResponse {
     }
 }
 
-pub async fn audio(Query(q): Query<ApiQuery>) -> Response {
+pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
+    if let Err(m) = guard::check_headers(&headers, guard::AUDIO) {
+        return json_error(StatusCode::TOO_MANY_REQUESTS, &m).into_response();
+    }
     let raw = q
         .v
         .as_deref()
@@ -178,8 +185,54 @@ pub struct IngestBody {
     pub cues: Vec<Cue>,
 }
 
+/// Translate already-loaded cues so Apply does not re-download from YouTube.
+pub async fn translate(headers: HeaderMap, Json(body): Json<TranslateBody>) -> impl IntoResponse {
+    if let Err(m) = guard::check_headers(&headers, guard::TRANSLATE) {
+        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    }
+    let tlang = body.tlang.as_deref().unwrap_or("").trim();
+    if tlang.is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "Pass tlang for the destination language.");
+    }
+    if body.cues.is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "No caption lines were sent.");
+    }
+    let sl = body.lang.as_deref().unwrap_or("");
+    match translate_cue_texts(body.cues, sl, tlang).await {
+        Ok(cues) => {
+            let payload = serde_json::json!({
+                "video_id": body.video_id,
+                "cues": cues,
+            })
+            .to_string();
+            file_response(
+                StatusCode::OK,
+                "application/json; charset=utf-8",
+                None,
+                payload,
+                false,
+            )
+        }
+        Err(e) => {
+            let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
+            json_error(status, &e.message)
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TranslateBody {
+    pub video_id: Option<String>,
+    pub lang: Option<String>,
+    pub tlang: Option<String>,
+    pub cues: Vec<Cue>,
+}
+
 /// Captions fetched in the user's browser (extension) — bypasses server IP blocks.
-pub async fn ingest(Json(body): Json<IngestBody>) -> impl IntoResponse {
+pub async fn ingest(headers: HeaderMap, Json(body): Json<IngestBody>) -> impl IntoResponse {
+    if let Err(m) = guard::check_headers(&headers, guard::INGEST) {
+        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    }
     match ingest_client_doc(
         body.video_id,
         body.title.unwrap_or_default(),
@@ -206,6 +259,24 @@ pub async fn ingest(Json(body): Json<IngestBody>) -> impl IntoResponse {
             json_error(status, &e.message)
         }
     }
+}
+
+pub async fn gate(Json(body): Json<GateBody>) -> impl IntoResponse {
+    match crate::guard::verify_turnstile(body.token.as_deref()).await {
+        Ok(()) => file_response(
+            StatusCode::OK,
+            "application/json; charset=utf-8",
+            None,
+            r#"{"ok":true}"#.into(),
+            false,
+        ),
+        Err(m) => json_error(StatusCode::FORBIDDEN, &m),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GateBody {
+    pub token: Option<String>,
 }
 
 pub async fn preflight() -> impl IntoResponse {

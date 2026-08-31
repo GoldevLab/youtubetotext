@@ -28,6 +28,9 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     let video_id = doc.video_id.clone();
     let title = doc.title.clone();
     let author = doc.author.clone();
+    let selected_track = track_key(&doc.track.lang, &doc.track.kind);
+    let lang_attr = selected_track;
+    let _ = lang;
     let duration = format_clock(doc.duration_secs.saturating_mul(1000), false);
     let words = doc.word_count();
     let read_mins = reading_minutes(&doc.plain_text());
@@ -296,10 +299,12 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         });
         if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value) ? `${shown} shown` : "";
     };
-    const setStatus = (ws, t) => {
+    const setStatus = (ws, t, holdOrMs) => {
         const status = ws?.querySelector("[data-status]");
         if (status) { status.textContent = t || ""; status.hidden = !t; }
-        if (t) setTimeout(() => { if (status && status.textContent === t) { status.textContent = ""; status.hidden = true; } }, 1800);
+        const hold = holdOrMs === true;
+        const ms = typeof holdOrMs === "number" ? holdOrMs : 2800;
+        if (t && !hold) setTimeout(() => { if (status && status.textContent === t) { status.textContent = ""; status.hidden = true; } }, ms);
     };
     const downloadFmt = (ws, fmt) => {
         const cues = visibleCues(ws);
@@ -341,6 +346,78 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 1500);
         setStatus(ws, `Downloaded ${name}.`);
+    };
+    const sourcePayload = (ws) => {
+        const el = ws.querySelector("#ytt-source");
+        try { return JSON.parse(el?.textContent || "{}"); } catch (_) { return {}; }
+    };
+    const paintCues = (ws, payload) => {
+        const el = ws.querySelector("#ytt-data");
+        if (el) el.textContent = JSON.stringify(payload);
+        const list = ws.querySelector("[data-cues]");
+        if (!list || !Array.isArray(payload.cues)) return;
+        const editing = ws.classList.contains("is-editing");
+        const frag = document.createDocumentFragment();
+        for (const c of payload.cues) {
+            const div = document.createElement("div");
+            div.className = "cue";
+            div.dataset.ms = String(c.start_ms ?? 0);
+            div.dataset.text = c.text || "";
+            div.setAttribute("role", "button");
+            div.tabIndex = 0;
+            const time = document.createElement("time");
+            time.textContent = fmtClock(Number(c.start_ms || 0));
+            const span = document.createElement("span");
+            span.setAttribute("data-cue-text", "");
+            span.textContent = c.text || "";
+            if (editing) {
+                span.contentEditable = "true";
+                span.spellcheck = true;
+            }
+            div.append(time, span);
+            frag.append(div);
+        }
+        list.replaceChildren(frag);
+    };
+    const storeSource = (ws, payload) => {
+        const el = ws.querySelector("#ytt-source");
+        if (el) el.textContent = JSON.stringify(payload);
+    };
+    const CUE_SEP = "\n\u{e000}\n";
+    const mmTranslateLines = async (sl, tl, lines, onProgress) => {
+        const out = [];
+        let batch = [];
+        let n = 0;
+        const flush = async () => {
+            if (!batch.length) return;
+            const run = async (q) => {
+                const u = "https://api.mymemory.translated.net/get?" + new URLSearchParams({ q, langpair: sl + "|" + tl });
+                const r = await fetch(u);
+                const j = await r.json();
+                const text = j && j.responseData && j.responseData.translatedText;
+                if (!r.ok || Number(j.responseStatus) !== 200 || typeof text !== "string") throw new Error("mm");
+                return text;
+            };
+            const joined = batch.join(CUE_SEP);
+            const text = await run(joined);
+            const parts = text.split(CUE_SEP);
+            if (parts.length === batch.length) {
+                out.push(...parts);
+            } else {
+                for (const line of batch) out.push(line.trim() ? await run(line) : line);
+            }
+            batch = [];
+            n = 0;
+            onProgress?.(out.length, lines.length);
+        };
+        for (const line of lines) {
+            const extra = (line || "").length + CUE_SEP.length;
+            if (batch.length && n + extra > 450) await flush();
+            batch.push(line || "");
+            n += extra;
+        }
+        await flush();
+        return out;
     };
     const paintMode = (ws, mode) => {
         if (!ws || !mode) return;
@@ -389,59 +466,101 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         const vid = ws.dataset.vid || String(fd.get("v") || "");
         if (!vid) return;
         const href = langHref(ws);
-        const qs = new URLSearchParams({ v: vid, fmt: "json" });
-        if (lang) qs.set("lang", lang);
-        if (tlang) qs.set("tlang", tlang);
         const applyBtn = ws.querySelector("[data-apply]");
         if (applyBtn) applyBtn.disabled = true;
-        setStatus(ws, tlang ? "Translating captions…" : "Loading captions…");
+        const prevLang = ws.dataset.lang || "";
+        const langChanged = Boolean(lang) && lang !== prevLang;
         try {
-            const res = await fetch("/api/transcript?" + qs.toString(), {
-                headers: { Accept: "application/json" },
-                credentials: "same-origin",
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || data.error || !Array.isArray(data.cues)) {
-                setStatus(ws, data.error || "Could not load that language. Try Apply again in a minute.");
+            if (langChanged) {
+                setStatus(ws, "Loading captions…", true);
+                const qs = new URLSearchParams({ v: vid, fmt: "json" });
+                if (lang) qs.set("lang", lang);
+                const res = await fetch("/api/transcript?" + qs.toString(), {
+                    headers: { Accept: "application/json" },
+                    credentials: "same-origin",
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error || !Array.isArray(data.cues)) {
+                    setStatus(ws, data.error || "Could not load that language. Try Apply again in a minute.");
+                    return;
+                }
+                const payload = {
+                    video_id: data.video_id || vid,
+                    title: data.title || "",
+                    author: data.author || "",
+                    cues: data.cues,
+                };
+                storeSource(ws, payload);
+                ws.dataset.lang = lang;
+                const trackName = data.track && data.track.name;
+                const metaBits = ws.querySelectorAll(".vid-meta span");
+                if (trackName && metaBits.length >= 3) metaBits[2].textContent = trackName;
+                if (!tlang) {
+                    paintCues(ws, payload);
+                    history.replaceState({}, "", href);
+                    paintMode(ws, ws.dataset.mode || "text");
+                    applyFilters(ws);
+                    setStatus(ws, "Captions updated.");
+                    return;
+                }
+            }
+            if (!tlang) {
+                const src = sourcePayload(ws);
+                if (!Array.isArray(src.cues) || !src.cues.length) {
+                    setStatus(ws, "Original captions are missing. Pick a caption track and Apply.");
+                    return;
+                }
+                paintCues(ws, src);
+                history.replaceState({}, "", href);
+                paintMode(ws, ws.dataset.mode || "text");
+                applyFilters(ws);
+                setStatus(ws, "Original captions are on the page.");
                 return;
             }
-            const payload = {
-                video_id: data.video_id || vid,
-                title: data.title || "",
-                author: data.author || "",
-                cues: data.cues,
-            };
-            const el = ws.querySelector("#ytt-data");
-            if (el) el.textContent = JSON.stringify(payload);
-            const list = ws.querySelector("[data-cues]");
-            if (list) {
-                const frag = document.createDocumentFragment();
-                for (const c of data.cues) {
-                    const div = document.createElement("div");
-                    div.className = "cue";
-                    div.dataset.ms = String(c.start_ms ?? 0);
-                    div.dataset.text = c.text || "";
-                    div.setAttribute("role", "button");
-                    div.tabIndex = 0;
-                    const time = document.createElement("time");
-                    time.textContent = fmtClock(Number(c.start_ms || 0));
-                    const span = document.createElement("span");
-                    span.setAttribute("data-cue-text", "");
-                    span.textContent = c.text || "";
-                    div.append(time, span);
-                    frag.append(div);
-                }
-                list.replaceChildren(frag);
+            const src = sourcePayload(ws);
+            const cues = Array.isArray(src.cues) ? src.cues : [];
+            if (!cues.length) {
+                setStatus(ws, "Load captions first, then translate.");
+                return;
             }
-            const trackName = data.track && data.track.name;
-            const metaBits = ws.querySelectorAll(".vid-meta span");
-            if (trackName && metaBits.length >= 3) metaBits[2].textContent = trackName;
+            setStatus(ws, "Translating captions…", true);
+            const sl = (lang.split(/[:|]/)[0] || "autodetect").split("-")[0] || "autodetect";
+            let next = null;
+            try {
+                const texts = await mmTranslateLines(sl, tlang, cues.map((c) => c.text || ""), (done, total) => {
+                    setStatus(ws, `Translating captions… ${done}/${total}`, true);
+                });
+                if (texts.length === cues.length) {
+                    next = cues.map((c, i) => ({ ...c, text: texts[i] }));
+                }
+            } catch (_) {}
+            if (!next) {
+                setStatus(ws, "Translating captions…", true);
+                const res = await fetch("/api/translate", {
+                    method: "POST",
+                    headers: { Accept: "application/json", "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ video_id: vid, lang, tlang, cues }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.error || !Array.isArray(data.cues)) {
+                    setStatus(ws, data.error || "Could not translate those captions. Try Apply again in a minute.");
+                    return;
+                }
+                next = data.cues;
+            }
+            paintCues(ws, {
+                video_id: src.video_id || vid,
+                title: src.title || "",
+                author: src.author || "",
+                cues: next,
+            });
             history.replaceState({}, "", href);
-            paintMode(ws, tlang ? "translate" : (ws.dataset.mode || "text"));
+            paintMode(ws, "translate");
             applyFilters(ws);
-            setStatus(ws, tlang ? "Translated captions are on the page." : "Captions updated.");
+            setStatus(ws, "Translated captions are on the page.");
         } catch (_) {
-            setStatus(ws, "Could not load that language.");
+            setStatus(ws, "Could not update captions.");
         } finally {
             if (applyBtn) applyBtn.disabled = false;
         }
@@ -571,6 +690,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         await S.playerP;
     };
 
+    window.__yttForge = {
+        applyLang, downloadFmt, mountPlayer, paintMode, applyFilters, setStatus,
+        parseId, go, visibleCues, writeClipboard, durationMs, wsData,
+    };
+
     if (!window.__yttForgeUi) {
         window.__yttForgeUi = true;
         window.__yttForgeState = { pickRange: false, rangePick: null, player: null, playerP: null, pendingMs: 0, vid: "" };
@@ -581,31 +705,29 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             quotes: "Extract the strongest quotes from this transcript. For each, add a one-line why-it-matters.\n\n",
         };
         document.addEventListener("click", (e) => {
+            const F = window.__yttForge;
+            if (!F) return;
             const t = e.target instanceof Element ? e.target : e.target?.parentElement;
             if (!t?.closest) return;
             const ws = t.closest("#ytt-ws") || liveWorkspace();
             const S = window.__yttForgeState;
             const tab = t.closest("[data-mode-tab]");
-            if (tab && ws && !t.closest("[data-audio]")) {
+            if (tab && ws) {
                 const mode = tab.getAttribute("data-mode-tab") || "text";
-                if (mode === "audio") {
-                    paintMode(ws, "audio");
-                    const audio = ws.querySelector("[data-audio]");
-                    if (audio && tab !== audio) {
-                        e.preventDefault();
-                        audio.click();
-                    }
-                    return;
-                }
                 e.preventDefault();
-                paintMode(ws, mode);
+                F.paintMode(ws, mode);
                 if (mode === "srt") {
-                    downloadFmt(ws, "srt");
+                    F.downloadFmt(ws, "srt");
                     ws.querySelector('[data-dl="srt"]')?.focus();
+                    F.setStatus(ws, "SRT downloaded. Use VTT beside it if you need WebVTT.", 3500);
                 } else if (mode === "translate") {
                     ws.querySelector("[data-tlang-select]")?.focus();
+                    F.setStatus(ws, "Pick a Translate language, then Apply.", 5000);
                 } else if (mode === "summary") {
-                    ws.querySelector(".recap")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                    const recap = ws.querySelector(".recap");
+                    recap?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                    ws.querySelector('[data-prompt="summary"]')?.focus();
+                    F.setStatus(ws, recap ? "Chapter recap is below. Summary copies a prompt for any AI chat." : "Copy Summary to paste into an AI chat.", 5000);
                 } else {
                     ws.querySelector("[data-search]")?.focus();
                 }
@@ -614,31 +736,31 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (!ws) return;
             if (t.closest("[data-apply]")) {
                 e.preventDefault();
-                applyLang(ws);
+                F.applyLang(ws);
                 return;
             }
             if (t.closest("[data-play]")) {
                 e.preventDefault();
-                mountPlayer(ws, 0);
+                F.mountPlayer(ws, 0);
                 return;
             }
             const dl = t.closest("[data-dl]");
             if (dl) {
                 e.preventDefault();
-                downloadFmt(ws, dl.getAttribute("data-dl"));
+                F.downloadFmt(ws, dl.getAttribute("data-dl"));
                 return;
             }
             const promptBtn = t.closest("[data-prompt]");
             if (promptBtn) {
                 e.preventDefault();
                 const kind = promptBtn.getAttribute("data-prompt");
-                const text = visibleCues(ws).map((c) => c.text).join("\n");
+                const text = F.visibleCues(ws).map((c) => c.text).join("\n");
                 if (!text.trim()) {
-                    setStatus(ws, "Nothing to copy — clear the search or widen the time range.");
+                    F.setStatus(ws, "Nothing to copy — clear the search or widen the time range.");
                     return;
                 }
                 const body = (prompts[kind] || prompts.summary) + text;
-                Promise.resolve(writeClipboard(body)).then(() => setStatus(ws, "Prompt copied — paste it into any AI chat.")).catch(() => setStatus(ws, "Could not copy the prompt."));
+                Promise.resolve(F.writeClipboard(body)).then(() => F.setStatus(ws, "Prompt copied — paste it into any AI chat.")).catch(() => F.setStatus(ws, "Could not copy the prompt."));
                 return;
             }
             const skipIntro = t.closest("[data-skip-intro]");
@@ -646,20 +768,20 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 const n = Number(skipIntro.getAttribute("data-skip-intro") || 0);
                 const fromInp = ws.querySelector("[data-from]");
                 if (fromInp) fromInp.value = String(n);
-                applyFilters(ws);
-                setStatus(ws, `Skipped the first ${n} seconds.`);
+                F.applyFilters(ws);
+                F.setStatus(ws, `Skipped the first ${n} seconds.`);
                 return;
             }
             const skipOutro = t.closest("[data-skip-outro]");
             if (skipOutro) {
                 const n = Number(skipOutro.getAttribute("data-skip-outro") || 0);
-                const max = Math.floor(durationMs(ws) / 1000);
+                const max = Math.floor(F.durationMs(ws) / 1000);
                 const fromInp = ws.querySelector("[data-from]");
                 const toInp = ws.querySelector("[data-to]");
                 const end = Math.max(Number(fromInp?.value || 0), max - n);
                 if (toInp) toInp.value = String(end);
-                applyFilters(ws);
-                setStatus(ws, `Skipped the last ${n} seconds.`);
+                F.applyFilters(ws);
+                F.setStatus(ws, `Skipped the last ${n} seconds.`);
                 return;
             }
             if (t.closest("[data-clear-trim]")) {
@@ -672,8 +794,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 const toInp = ws.querySelector("[data-to]");
                 if (fromInp) fromInp.value = "";
                 if (toInp) toInp.value = "";
-                applyFilters(ws);
-                setStatus(ws, "Trim cleared.");
+                F.applyFilters(ws);
+                F.setStatus(ws, "Trim cleared.");
                 return;
             }
             const pickBtn = t.closest("[data-pick-range]");
@@ -682,7 +804,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 S.rangePick = null;
                 pickBtn.setAttribute("aria-pressed", S.pickRange ? "true" : "false");
                 pickBtn.classList.toggle("is-on", S.pickRange);
-                setStatus(ws, S.pickRange ? "Click a start line, then an end line." : "");
+                F.setStatus(ws, S.pickRange ? "Click a start line, then an end line." : "");
                 return;
             }
             const editBtn = t.closest("[data-edit]");
@@ -695,13 +817,13 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     span.contentEditable = on ? "true" : "false";
                     span.spellcheck = true;
                 });
-                setStatus(ws, on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
+                F.setStatus(ws, on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
                 return;
             }
             const chapter = t.closest("[data-chapters] a[data-ms]");
             if (chapter) {
                 e.preventDefault();
-                mountPlayer(ws, Number(chapter.dataset.ms || 0));
+                F.mountPlayer(ws, Number(chapter.dataset.ms || 0));
                 return;
             }
             const cue = t.closest(".cue");
@@ -716,8 +838,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     if (S.rangePick == null) {
                         S.rangePick = ms;
                         if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
-                        applyFilters(ws);
-                        setStatus(ws, "Now click the last line to keep.");
+                        F.applyFilters(ws);
+                        F.setStatus(ws, "Now click the last line to keep.");
                         return;
                     }
                     let start = S.rangePick;
@@ -729,57 +851,56 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     S.pickRange = false;
                     pick?.setAttribute("aria-pressed", "false");
                     pick?.classList.remove("is-on");
-                    applyFilters(ws);
-                    setStatus(ws, "Range set. Copy and downloads use these lines.");
+                    F.applyFilters(ws);
+                    F.setStatus(ws, "Range set. Copy and downloads use these lines.");
                     return;
                 }
-                mountPlayer(ws, ms);
+                F.mountPlayer(ws, ms);
             }
         });
         document.addEventListener("submit", (e) => {
+            const F = window.__yttForge;
+            if (!F) return;
             const form = e.target;
             if (!(form instanceof HTMLFormElement)) return;
             const ws = form.closest("#ytt-ws") || liveWorkspace();
             if (!ws) return;
             if (form.classList.contains("toolbar-lang")) {
                 e.preventDefault();
-                applyLang(ws);
+                F.applyLang(ws);
                 return;
             }
             if (form.hasAttribute("data-another")) {
                 e.preventDefault();
+                const hp = form.querySelector('[name="website"]');
+                if (hp && String(hp.value || "").trim()) return;
                 const input = form.querySelector('input[name="url"]');
                 const err = form.querySelector("[data-another-error]");
-                const id = parseId(input?.value);
+                const id = F.parseId(input?.value);
                 if (!id) {
                     if (err) { err.hidden = false; err.textContent = "That does not look like a YouTube link."; }
                     input?.focus();
                     return;
                 }
                 if (err) err.hidden = true;
-                go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(ws.dataset.mode || "text"));
+                F.go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(ws.dataset.mode || "text"));
             }
         });
-        document.addEventListener("change", (e) => {
-            const t = e.target;
-            if (!(t instanceof Element)) return;
-            const ws = t.closest("#ytt-ws");
-            if (!ws) return;
-            if (t.matches("[data-lang-select], [data-tlang-select]")) applyLang(ws);
-        });
         document.addEventListener("input", (e) => {
+            const F = window.__yttForge;
+            if (!F) return;
             const t = e.target;
             if (!(t instanceof Element)) return;
             const ws = t.closest("#ytt-ws");
             if (!ws) return;
-            if (t.matches("[data-search], [data-from], [data-to]")) applyFilters(ws);
+            if (t.matches("[data-search], [data-from], [data-to]")) F.applyFilters(ws);
             const span = t.closest("[data-cue-text]");
             const cueEl = span?.closest(".cue");
             if (!cueEl) return;
             const ms = Number(cueEl.dataset.ms || 0);
             const text = span.textContent || "";
             cueEl.dataset.text = text;
-            const dataNow = wsData(ws);
+            const dataNow = F.wsData(ws);
             const cue = dataNow.cues.find((c) => c.start_ms === ms);
             if (cue) cue.text = text;
             const el = ws.querySelector("#ytt-data");
@@ -812,9 +933,9 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     );
 
     view! {
-        <div id="ytt-ws" class={ws_class} data-vid={video_id.clone()} data-lang={lang} data-duration={duration_attr} data-mode={mode_slug.clone()}>
+        <div id="ytt-ws" class={ws_class} data-vid={video_id.clone()} data-lang={lang_attr} data-duration={duration_attr} data-mode={mode_slug.clone()}>
             {View::raw(format!(
-                r#"<script type="application/json" id="ytt-data">{json}</script>"#
+                r#"<script type="application/json" id="ytt-data">{json}</script><script type="application/json" id="ytt-source">{json}</script>"#
             ))}
             <aside class="player-col">
                 <div class="player-card">
@@ -843,6 +964,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">
+                        <label class="hp-field" aria-hidden="true">
+                            "Company website"
+                            <input name="website" type="text" tabindex="-1" autocomplete="off" />
+                        </label>
                         <label>
                             "Another video"
                             <span class="hero-field">
@@ -874,7 +999,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         "Translate"
                         <select name="tlang" data-tlang-select="">{tlang_options}</select>
                     </label>
-                    <button type="submit" class="btn btn-primary" data-apply="">"Apply"</button>
+                    <button type="button" class="btn btn-primary" data-apply="">"Apply"</button>
                 </form>
                 <div class="toolbar">
                     <label class="grow">
@@ -952,7 +1077,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 }}
                 {crate::ads::slot("workspace-cues", "infeed")}
                 {View::raw(cues_html)}
-                {crate::cross_sell::related(parsed_mode, &video_id)}
             </section>
         </div>
     }

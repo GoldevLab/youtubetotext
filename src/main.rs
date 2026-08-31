@@ -6,6 +6,7 @@ mod api;
 mod cross_sell;
 mod export;
 mod family;
+mod guard;
 mod landing;
 mod langs;
 mod pages;
@@ -282,6 +283,7 @@ fn seo_kit() -> SeoKit {
         "How to use".into(),
         "Open / with a YouTube URL, or go to /v/{videoId}. Optional query: lang, tlang.".into(),
     )];
+    kit.ai.disallow = vec!["/api/".into()];
     kit
 }
 
@@ -309,6 +311,8 @@ async fn main() -> std::io::Result<()> {
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/ingest", post(api::ingest).options(api::preflight))
+        .route("/api/translate", post(api::translate).options(api::preflight))
+        .route("/api/gate", post(api::gate).options(api::preflight))
         .not_found(not_found)
         .auto_pages(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages"),

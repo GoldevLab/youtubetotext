@@ -26,6 +26,9 @@ pub fn page(_req: FlowRequest) -> View {
                     </tbody>
                 </table>
             </div>
+            <p class="hint">
+                "Fair use: we rate-limit each network so a bot cannot drain YouTube through this API. 429 means wait a minute."
+            </p>
             <h2>"Examples"</h2>
             <pre class="code-block"><code>
 {r#"curl "https://youtubetotext.fly.dev/api/transcript?v=dQw4w9WgXcQ&fmt=srt" -o video.srt

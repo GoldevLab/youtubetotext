@@ -1,33 +1,13 @@
 use resuma::prelude::*;
 
-use crate::family::{app_href, Mode};
+use crate::family::Mode;
 
-pub fn related(current: Mode, video_id: &str) -> View {
-    let vid = video_id.to_string();
+pub fn related(current: Mode) -> View {
     let cards = Mode::all()
         .into_iter()
         .filter(|m| *m != current)
         .map(|m| {
-            let slug = m.slug();
-            let (href, extra, spa) = if vid.is_empty() {
-                (
-                    m.landing_path().to_string(),
-                    "How this job works".to_string(),
-                    true,
-                )
-            } else if m == Mode::Audio {
-                (
-                    format!("/api/audio?v={vid}"),
-                    "Same video — saves the soundtrack".to_string(),
-                    false,
-                )
-            } else {
-                (
-                    app_href(&vid, m),
-                    "Same video — no new link".to_string(),
-                    true,
-                )
-            };
+            let href = m.landing_path().to_string();
             let label = match m {
                 Mode::Text => "Read the transcript",
                 Mode::Audio => "Download audio file",
@@ -35,33 +15,22 @@ pub fn related(current: Mode, video_id: &str) -> View {
                 Mode::Summary => "Summarize with chapters",
                 Mode::Srt => "Download SRT / VTT",
             };
-            if spa {
-                view! {
-                    <li>
-                        <a href={href} class="related-card" data-r-nav="true" data-mode-tab={slug}>
-                            <strong>{label}</strong>
-                            <span>{extra}</span>
-                        </a>
-                    </li>
-                }
-            } else {
-                view! {
-                    <li>
-                        <a href={href} class="related-card" data-mode-tab={slug} rel="noopener">
-                            <strong>{label}</strong>
-                            <span>{extra}</span>
-                        </a>
-                    </li>
-                }
+            view! {
+                <li>
+                    <a href={href} class="related-card" data-r-nav="true">
+                        <strong>{label}</strong>
+                        <span>"How this job works"</span>
+                    </a>
+                </li>
             }
         })
         .collect::<Vec<_>>();
 
     view! {
         <nav class="cross-sell" aria-label="Related YouTube tools">
-            <h2>"Same video — next job"</h2>
+            <h2>"Other YouTubeForge tools"</h2>
             <p class="hint">
-                "Audio, translation, summary, and SRT use the transcript you already loaded."
+                "Transcript, audio, translation, summary, and SRT are separate jobs — pick the one you need."
             </p>
             <ul class="related-grid">{cards}</ul>
         </nav>

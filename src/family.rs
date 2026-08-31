@@ -192,7 +192,7 @@ const TRANSLATE: Landing = Landing {
         ("Line alignment", "A chat model will merge sentences and drop times. tlang keeps cue boundaries."),
         ("Shareable language pair", "/v/{id}?lang=en&tlang=es is a document, not a one-off paste."),
         ("Same downloads", "Translated cues still export as SRT, VTT, TXT, Markdown, JSON."),
-        ("No extra API key", "We do not send the transcript to a third-party MT API."),
+        ("Works when YouTube is busy", "If caption downloads are rate-limited, Apply still translates the lines already on the page."),
     ],
     examples_title: "Translation jobs this page is built for",
     examples: [
@@ -200,13 +200,13 @@ const TRANSLATE: Landing = Landing {
         ("Bilingual subtitles file", "Translate then download SRT for a player that needs a .srt."),
         ("Channel not in your language", "Use auto-captions as source, then tlang — quality follows YouTube’s MT."),
     ],
-    limits: "Translation quality is YouTube’s, including names and jargon mistakes. Tracks marked non-translatable cannot use tlang. We do not run a separate neural MT model.",
+    limits: "Cue times stay aligned. When YouTube’s caption translator is available we use it; if that network is rate-limited, we translate the loaded lines instead. Names and jargon can still come out wrong.",
     faq: [
         ("Is this a full YouTube video translator?", "We translate captions, not burned-in video pixels or the audio track."),
         ("Which languages?", "Whatever YouTube lists on that video’s translatable track. The app shows the catalog."),
         ("Does the share link remember the language?", "Yes: lang for the source track, tlang for the translation."),
         ("Can I edit a bad translation?", "Edit mode changes the text on your device, then copy/download."),
-        ("What if there are no captions?", "Nothing to translate. Try Audio, or pick a video with auto-captions on."),
+        ("What if YouTube is rate-limiting captions?", "Apply translates the transcript already on the page. You do not need to download captions again."),
     ],
 };
 

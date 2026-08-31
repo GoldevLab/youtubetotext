@@ -113,7 +113,7 @@ pub fn seo_landing(mode: Mode) -> View {
                 <div class="faq-list">{faq}</div>
             </section>
 
-            {crate::cross_sell::related(mode, "")}
+            {crate::cross_sell::related(mode)}
         </main>
     }
 }
