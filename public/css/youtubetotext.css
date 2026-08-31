@@ -1269,11 +1269,7 @@ select:focus-visible {
 }
 
 #ytt-ws[data-ready="1"] [data-apply] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  display: inline-flex;
 }
 
 .another-form {
@@ -1452,8 +1448,14 @@ select:focus-visible {
   }
 }
 
-.workspace.is-mode-srt [data-dl="srt"] {
+.workspace.is-mode-srt [data-dl="srt"],
+.workspace.is-mode-audio [data-audio],
+.workspace.is-mode-translate [data-tlang-select] {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.workspace:not(.is-mode-summary) .recap {
+  display: none;
 }
 
 .family-grid,
@@ -1478,6 +1480,12 @@ select:focus-visible {
   text-decoration: none;
   color: inherit;
   min-height: 5.5rem;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  text-align: start;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .family-card:hover,
@@ -1501,8 +1509,9 @@ select:focus-visible {
 .mode-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 1rem 0 0;
+  gap: 0.45rem;
+  margin: 0 0 0.25rem;
+  grid-column: 1 / -1;
 }
 
 .mode-tab {
@@ -1512,6 +1521,10 @@ select:focus-visible {
   padding: 0.4rem 0.75rem;
   border-radius: var(--radius-btn);
   background: var(--bg-soft);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
 }
 
 .mode-tab.is-active {

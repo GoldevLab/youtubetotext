@@ -1,6 +1,5 @@
 use resuma::prelude::*;
 
-use crate::cross_sell::mode_tabs;
 use crate::family::{app_href, Mode};
 use crate::parse::parse_video_id;
 use crate::tool::home_search;
@@ -79,7 +78,6 @@ fn transcript_workspace(req: FlowRequest, video_id: String, mode: Mode) -> View 
             move |res| match res {
                 Ok(doc) => view! {
                     <main class="workspace-main">
-                        {mode_tabs(mode, &vid)}
                         {crate::ads::slot("workspace-top", "infeed")}
                         {workspace(doc, lang_ok, tlang_ok, mode_ok)}
                     </main>

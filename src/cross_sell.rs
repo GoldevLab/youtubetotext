@@ -8,30 +8,51 @@ pub fn related(current: Mode, video_id: &str) -> View {
         .into_iter()
         .filter(|m| *m != current)
         .map(|m| {
-            let href = if vid.is_empty() {
-                m.landing_path().to_string()
+            let slug = m.slug();
+            let (href, extra, spa) = if vid.is_empty() {
+                (
+                    m.landing_path().to_string(),
+                    "How this job works".to_string(),
+                    true,
+                )
+            } else if m == Mode::Audio {
+                (
+                    format!("/api/audio?v={vid}"),
+                    "Same video — saves the soundtrack".to_string(),
+                    false,
+                )
             } else {
-                app_href(&vid, m)
+                (
+                    app_href(&vid, m),
+                    "Same video — no new link".to_string(),
+                    true,
+                )
             };
             let label = match m {
                 Mode::Text => "Read the transcript",
-                Mode::Audio => "Download audio",
+                Mode::Audio => "Download audio file",
                 Mode::Translate => "Translate captions",
                 Mode::Summary => "Summarize with chapters",
                 Mode::Srt => "Download SRT / VTT",
             };
-            let extra = if vid.is_empty() {
-                "How this job works".to_string()
+            if spa {
+                view! {
+                    <li>
+                        <a href={href} class="related-card" data-r-nav="true" data-mode-tab={slug}>
+                            <strong>{label}</strong>
+                            <span>{extra}</span>
+                        </a>
+                    </li>
+                }
             } else {
-                "Same video — no new link".to_string()
-            };
-            view! {
-                <li>
-                    <NavLink href={href} class="related-card">
-                        <strong>{label}</strong>
-                        <span>{extra}</span>
-                    </NavLink>
-                </li>
+                view! {
+                    <li>
+                        <a href={href} class="related-card" data-mode-tab={slug} rel="noopener">
+                            <strong>{label}</strong>
+                            <span>{extra}</span>
+                        </a>
+                    </li>
+                }
             }
         })
         .collect::<Vec<_>>();
@@ -55,21 +76,32 @@ pub fn mode_tabs(active: Mode, video_id: &str) -> View {
     let links = Mode::all()
         .into_iter()
         .map(|m| {
-            let href = app_href(&vid, m);
+            let href = if m == Mode::Audio {
+                format!("/api/audio?v={vid}")
+            } else {
+                app_href(&vid, m)
+            };
             let label = m.nav_label();
-            if m == active {
+            let slug = m.slug();
+            let class = if m == active {
+                "mode-tab nav-link is-active"
+            } else {
+                "mode-tab nav-link"
+            };
+            let spa = m != Mode::Audio;
+            if spa {
                 view! {
-                    <NavLink href={href} class="mode-tab is-active">{label}</NavLink>
+                    <a href={href} class={class} data-r-nav="true" data-mode-tab={slug}>{label}</a>
                 }
             } else {
                 view! {
-                    <NavLink href={href} class="mode-tab">{label}</NavLink>
+                    <a href={href} class={class} data-mode-tab={slug} rel="noopener">{label}</a>
                 }
             }
         })
         .collect::<Vec<_>>();
     view! {
-        <nav class="mode-tabs" aria-label="Same video">
+        <nav class="mode-tabs" aria-label="Jobs for this video">
             {links}
         </nav>
     }

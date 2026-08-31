@@ -35,7 +35,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     let is_auto = doc.track.kind == "asr";
     let thumb = format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg");
     let watch = format!("https://www.youtube.com/watch?v={video_id}");
-    let action = format!("/v/{video_id}");
+    let action = "/".to_string();
     let cue_count = doc.cues.len();
     let payload = ClientDoc {
         video_id: video_id.clone(),
@@ -104,14 +104,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
     let parsed_mode = Mode::parse(&mode);
     let audio_href = format!("/api/audio?v={video_id}");
-    let recap = if parsed_mode == Mode::Summary {
-        extractive_summary(&doc)
-    } else {
-        String::new()
-    };
+    let recap = extractive_summary(&doc);
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
     let share = format!("/v/{video_id}");
     let mode_slug = parsed_mode.slug().to_string();
+    let tabs = crate::cross_sell::mode_tabs(parsed_mode, &video_id);
 
     visible_task!(
         r##"
@@ -220,34 +217,22 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             });
         }, true);
     }
-    const root = liveWorkspace();
-    if (!root || root.dataset.ready === "1") return;
-    root.dataset.ready = "1";
-    const dataEl = root.querySelector("#ytt-data") || document.getElementById("ytt-data");
-    let data = { video_id: root.dataset.vid, title: "", author: "", cues: [] };
-    try { data = JSON.parse(dataEl?.textContent || "{}"); } catch (_) {}
-    try {
-        const KEY = "youtubetotext-recent";
-        const cur = JSON.parse(localStorage.getItem(KEY) || "[]");
-        const next = [{ id: data.video_id, title: data.title || data.video_id, at: Date.now() }, ...cur.filter((x) => x.id !== data.video_id)].slice(0, 8);
-        localStorage.setItem(KEY, JSON.stringify(next));
-    } catch (_) {}
-    const list = root.querySelector("[data-cues]");
-    const search = root.querySelector("[data-search]");
-    const countEl = root.querySelector("[data-count]");
-    const status = root.querySelector("[data-status]");
-    const fromInp = root.querySelector("[data-from]");
-    const toInp = root.querySelector("[data-to]");
-    const stamps = root.querySelector("[data-stamps]");
-    const pickBtn = root.querySelector("[data-pick-range]");
-    const editBtn = root.querySelector("[data-edit]");
-    const EDIT_KEY = "youtubetotext-edits-" + (data.video_id || root.dataset.vid);
-    let player = null;
-    let pendingMs = 0;
-    let ytApi = null;
-    let pickRange = false;
-    let rangePick = null;
-
+    const parseId = (raw) => {
+        const s = String(raw || "").trim();
+        if (/^[\w-]{11}$/.test(s)) return s;
+        try {
+            const u = new URL(s.startsWith("http") ? s : "https://" + s);
+            const v = u.searchParams.get("v") || u.searchParams.get("vi");
+            if (v && /^[\w-]{11}$/.test(v)) return v;
+            const parts = u.pathname.split("/").filter(Boolean);
+            const host = u.hostname.replace(/^www./, "");
+            if (host === "youtu.be" && /^[\w-]{11}$/.test(parts[0] || "")) return parts[0];
+            const i = parts.findIndex((p) => ["embed","shorts","live","v","watch"].includes(p));
+            const id = i >= 0 ? (parts[i + 1] || "").slice(0, 11) : "";
+            if (/^[\w-]{11}$/.test(id)) return id;
+        } catch (_) {}
+        return null;
+    };
     const go = (path) => {
         document.documentElement.classList.add("is-navigating");
         if (typeof __resuma?.navigate === "function") {
@@ -258,74 +243,47 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             location.assign(path);
         }
     };
-    const parseId = (raw) => {
-        const s = String(raw || "").trim();
-        if (/^[\w-]{11}$/.test(s)) return s;
-        try {
-            const u = new URL(s.startsWith("http") ? s : "https://" + s);
-            const v = u.searchParams.get("v") || u.searchParams.get("vi");
-            if (v && /^[\w-]{11}$/.test(v)) return v;
-            const parts = u.pathname.split("/").filter(Boolean);
-            const host = u.hostname.replace(/^www\./, "");
-            if (host === "youtu.be" && /^[\w-]{11}$/.test(parts[0] || "")) return parts[0];
-            const i = parts.findIndex((p) => ["embed","shorts","live","v","watch"].includes(p));
-            const id = i >= 0 ? (parts[i + 1] || "").slice(0, 11) : "";
-            if (/^[\w-]{11}$/.test(id)) return id;
-        } catch (_) {}
-        return null;
+    const wsData = (ws) => {
+        if (!ws) return { video_id: "", title: "", author: "", cues: [] };
+        const dataEl = ws.querySelector("#ytt-data") || document.getElementById("ytt-data");
+        let data = { video_id: ws?.dataset.vid || "", title: "", author: "", cues: [] };
+        try { data = JSON.parse(dataEl?.textContent || "{}"); } catch (_) {}
+        return data;
     };
-    const loadEdits = () => {
-        try { return JSON.parse(localStorage.getItem(EDIT_KEY) || "{}"); } catch { return {}; }
-    };
-    const saveEdits = () => {
-        const map = {};
-        for (const c of data.cues) map[c.start_ms] = c.text;
-        try { localStorage.setItem(EDIT_KEY, JSON.stringify(map)); } catch (_) {}
-    };
-    const applyStoredEdits = () => {
-        const edits = loadEdits();
-        data.cues.forEach((c) => {
-            const next = edits[c.start_ms] ?? edits[String(c.start_ms)];
-            if (typeof next === "string") c.text = next;
-        });
-        list?.querySelectorAll(".cue").forEach((el) => {
-            const ms = el.dataset.ms;
-            const next = edits[ms] ?? edits[Number(ms)];
-            if (typeof next !== "string") return;
-            el.dataset.text = next;
-            const span = el.querySelector("[data-cue-text]");
-            if (span) span.textContent = next;
-        });
-    };
-    applyStoredEdits();
-
-    const setStatus = (t) => { if (status) { status.textContent = t || ""; status.hidden = !t; } };
-    const durationMs = () => {
-        const secs = Number(root.dataset.duration || 0);
+    const durationMs = (ws) => {
+        const secs = Number(ws?.dataset.duration || 0);
         if (secs > 0) return secs * 1000;
+        const data = wsData(ws);
         return (data.cues.at(-1)?.start_ms || 0) + 5000;
     };
-    const rangeMs = () => {
-        const max = durationMs();
+    const rangeMs = (ws) => {
+        const fromInp = ws.querySelector("[data-from]");
+        const toInp = ws.querySelector("[data-to]");
+        const max = durationMs(ws);
         const from = Math.max(0, Number(fromInp?.value || 0) * 1000);
         const toRaw = Number(toInp?.value || 0);
         const to = toRaw > 0 ? Math.min(toRaw * 1000, max) : max;
-        return { from, to };
+        return { from, to, fromInp, toInp };
     };
-    const visibleCues = () => {
-        const q = (search?.value || "").trim().toLowerCase();
-        const { from, to } = rangeMs();
+    const visibleCues = (ws) => {
+        const data = wsData(ws);
+        const q = (ws.querySelector("[data-search]")?.value || "").trim().toLowerCase();
+        const { from, to } = rangeMs(ws);
         return data.cues.filter((c) => {
             if (c.start_ms < from || c.start_ms > to) return false;
             if (q && !c.text.toLowerCase().includes(q)) return false;
             return true;
         });
     };
-    const applyFilters = () => {
+    const applyFilters = (ws) => {
+        const search = ws.querySelector("[data-search]");
+        const countEl = ws.querySelector("[data-count]");
+        const list = ws.querySelector("[data-cues]");
         const q = (search?.value || "").trim().toLowerCase();
-        const { from, to } = rangeMs();
+        const { from, to, fromInp, toInp } = rangeMs(ws);
         const fromRaw = Number(fromInp?.value || 0);
         const toRaw = Number(toInp?.value || 0);
+        const st = window.__yttForgeState || {};
         let shown = 0;
         list?.querySelectorAll(".cue").forEach((el) => {
             const ms = Number(el.dataset.ms || 0);
@@ -334,21 +292,24 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             el.hidden = hide;
             el.classList.toggle("is-hit", !hide && !!q);
             el.classList.toggle("is-range-start", !hide && fromRaw > 0 && ms === from);
-            el.classList.toggle("is-range-end", !hide && (ms === rangePick || (toRaw > 0 && ms === to)));
+            el.classList.toggle("is-range-end", !hide && (ms === st.rangePick || (toRaw > 0 && ms === to)));
             if (!hide) shown++;
         });
-        if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value)
-            ? `${shown} shown`
-            : "";
+        if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value) ? `${shown} shown` : "";
     };
-    const download = (fmt) => {
-        const cues = visibleCues();
+    const setStatus = (ws, t) => {
+        const status = ws?.querySelector("[data-status]");
+        if (status) { status.textContent = t || ""; status.hidden = !t; }
+        if (t) setTimeout(() => { if (status && status.textContent === t) { status.textContent = ""; status.hidden = true; } }, 1800);
+    };
+    const downloadFmt = (ws, fmt) => {
+        const cues = visibleCues(ws);
         if (!cues.length) {
-            setStatus("Nothing to download — clear the search or widen the time range.");
-            setTimeout(() => setStatus(""), 2200);
+            setStatus(ws, "Nothing to download — clear the search or widen the time range.");
             return;
         }
-        const id = data.video_id;
+        const data = wsData(ws);
+        const id = data.video_id || ws.dataset.vid;
         const srtClock = (ms) => {
             const h = Math.floor(ms/3600000), m = Math.floor(ms/60000)%60, s = Math.floor(ms/1000)%60, f = ms%1000;
             return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")},${String(f).padStart(3,"0")}`;
@@ -367,7 +328,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             name = `${id}.json`; mime = "application/json";
             body = JSON.stringify({ video_id: id, title: data.title, cues }, null, 2);
         } else {
-            body = (stamps?.checked ? cues.map((c) => `[${fmtClock(c.start_ms)}] ${c.text}`) : cues.map((c) => c.text)).join("\n");
+            const stamps = ws.querySelector("[data-stamps]")?.checked;
+            body = (stamps ? cues.map((c) => `[${fmtClock(c.start_ms)}] ${c.text}`) : cues.map((c) => c.text)).join("\n");
         }
         const blob = new Blob([body], { type: mime });
         const a = document.createElement("a");
@@ -379,8 +341,81 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        setStatus(ws, `Downloaded ${name}.`);
     };
-    let playerP = null;
+    const paintMode = (ws, mode) => {
+        if (!ws || !mode) return;
+        ws.dataset.mode = mode;
+        ws.className = String(ws.className || "").replace(/\bis-mode-\w+/g, "").trim() + " is-mode-" + mode;
+        ws.querySelectorAll(".mode-tab").forEach((el) => {
+            el.classList.toggle("is-active", el.getAttribute("data-mode-tab") === mode);
+        });
+        const u = new URL(location.href);
+        if (u.pathname === "/" || u.pathname === "") {
+            u.searchParams.set("v", ws.dataset.vid || "");
+            u.searchParams.set("mode", mode);
+            history.replaceState({}, "", u.pathname + u.search);
+        }
+    };
+    const langHref = (ws) => {
+        const form = ws.querySelector(".toolbar-lang");
+        const u = new URL(location.href);
+        const fd = form ? new FormData(form) : new FormData();
+        const lang = String(fd.get("lang") || "");
+        const tlang = String(fd.get("tlang") || "");
+        if (u.pathname === "/" || u.pathname === "") {
+            u.searchParams.set("v", ws.dataset.vid || "");
+            u.searchParams.set("mode", ws.dataset.mode || "translate");
+        }
+        if (lang) u.searchParams.set("lang", lang); else u.searchParams.delete("lang");
+        if (tlang) u.searchParams.set("tlang", tlang); else u.searchParams.delete("tlang");
+        return u.pathname + u.search;
+    };
+    const root = liveWorkspace();
+    if (root) {
+    const dataEl = root.querySelector("#ytt-data") || document.getElementById("ytt-data");
+    let data = { video_id: root.dataset.vid, title: "", author: "", cues: [] };
+    try { data = JSON.parse(dataEl?.textContent || "{}"); } catch (_) {}
+    try {
+        const KEY = "youtubetotext-recent";
+        const cur = JSON.parse(localStorage.getItem(KEY) || "[]");
+        const next = [{ id: data.video_id, title: data.title || data.video_id, at: Date.now() }, ...cur.filter((x) => x.id !== data.video_id)].slice(0, 8);
+        localStorage.setItem(KEY, JSON.stringify(next));
+    } catch (_) {}
+    const applyStoredEdits = (ws) => {
+        const dataNow = wsData(ws);
+        const edits = (() => {
+            try { return JSON.parse(localStorage.getItem("youtubetotext-edits-" + (dataNow.video_id || ws.dataset.vid || "")) || "{}"); } catch { return {}; }
+        })();
+        dataNow.cues.forEach((c) => {
+            const next = edits[c.start_ms] ?? edits[String(c.start_ms)];
+            if (typeof next === "string") c.text = next;
+        });
+        const el = ws.querySelector("#ytt-data");
+        if (el) el.textContent = JSON.stringify(dataNow);
+        ws.querySelectorAll(".cue").forEach((cueEl) => {
+            const ms = cueEl.dataset.ms;
+            const next = edits[ms] ?? edits[Number(ms)];
+            if (typeof next !== "string") return;
+            cueEl.dataset.text = next;
+            const span = cueEl.querySelector("[data-cue-text]");
+            if (span) span.textContent = next;
+        });
+    };
+    applyStoredEdits(root);
+    applyFilters(root);
+    root.dataset.ready = "1";
+    if (root.dataset.mode === "translate") {
+        root.querySelector("[data-tlang-select]")?.focus();
+    } else if (root.dataset.mode === "summary") {
+        root.querySelector(".recap")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } else if (root.dataset.mode === "srt") {
+        root.querySelector('[data-dl="srt"]')?.focus();
+    } else if (root.dataset.mode === "audio") {
+        root.querySelector("[data-audio]")?.focus();
+    }
+    }
+
     const loadApi = () => new Promise((resolve) => {
         if (window.YT?.Player) return resolve(window.YT);
         const prev = window.onYouTubeIframeAPIReady;
@@ -392,43 +427,54 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         }
         setTimeout(() => resolve(window.YT), 8000);
     });
-    const mountPlayer = async (startMs) => {
-        const host = root.querySelector("[data-player]");
+    const mountPlayer = async (ws, startMs) => {
+        window.__yttForgeState = window.__yttForgeState || { pickRange: false, rangePick: null, player: null, playerP: null, pendingMs: 0, vid: "" };
+        const host = ws.querySelector("[data-player]");
         if (!host) return;
-        pendingMs = startMs || 0;
-        if (player) {
-            try { player.seekTo(pendingMs / 1000, true); player.playVideo?.(); } catch (_) {}
+        const S = window.__yttForgeState;
+        const vid = ws.dataset.vid || "";
+        if (S.vid && S.vid !== vid) {
+            S.player = null;
+            S.playerP = null;
+        }
+        S.vid = vid;
+        S.pendingMs = startMs || 0;
+        if (S.player) {
+            try { S.player.seekTo(S.pendingMs / 1000, true); S.player.playVideo?.(); } catch (_) {}
             return;
         }
-        if (playerP) {
-            await playerP;
-            if (player) {
-                try { player.seekTo(pendingMs / 1000, true); player.playVideo?.(); } catch (_) {}
+        if (S.playerP) {
+            await S.playerP;
+            if (S.player) {
+                try { S.player.seekTo(S.pendingMs / 1000, true); S.player.playVideo?.(); } catch (_) {}
                 return;
             }
-            playerP = null;
+            S.playerP = null;
         }
-        playerP = (async () => {
+        const dataNow = wsData(ws);
+        S.playerP = (async () => {
             host.innerHTML = `<div id="yt-frame"></div>`;
-            ytApi = await loadApi();
+            const ytApi = await loadApi();
             if (!ytApi?.Player) {
-                window.location.href = `https://www.youtube.com/watch?v=${data.video_id}&t=${Math.floor(pendingMs/1000)}s`;
+                window.location.href = `https://www.youtube.com/watch?v=${dataNow.video_id}&t=${Math.floor(S.pendingMs/1000)}s`;
                 return;
             }
-            player = new ytApi.Player("yt-frame", {
-                videoId: data.video_id,
+            S.player = new ytApi.Player("yt-frame", {
+                videoId: dataNow.video_id,
                 host: "https://www.youtube-nocookie.com",
-                playerVars: { rel: 0, modestbranding: 1, start: Math.floor(pendingMs/1000), origin: location.origin },
+                playerVars: { rel: 0, modestbranding: 1, start: Math.floor(S.pendingMs/1000), origin: location.origin },
                 events: {
-                    onReady: (e) => { try { e.target.seekTo(pendingMs/1000, true); e.target.playVideo(); } catch (_) {} }
+                    onReady: (e) => { try { e.target.seekTo(S.pendingMs/1000, true); e.target.playVideo(); } catch (_) {} }
                 }
             });
             let last = "";
             setInterval(() => {
+                const live = liveWorkspace();
+                const list = live?.querySelector("[data-cues]");
                 let t = 0;
-                try { t = player.getCurrentTime() * 1000; } catch (_) { return; }
+                try { t = S.player.getCurrentTime() * 1000; } catch (_) { return; }
                 let current = null;
-                for (const c of data.cues) {
+                for (const c of wsData(live).cues) {
                     if (c.start_ms <= t) current = c;
                     else break;
                 }
@@ -447,204 +493,250 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 }
             }, 250);
         })();
-        await playerP;
+        await S.playerP;
     };
-    const navigateLang = () => {
-        const form = root.querySelector(".toolbar-lang");
-        if (!form) return;
-        const params = new URLSearchParams(new FormData(form));
-        if (!params.get("tlang")) params.delete("tlang");
-        const qs = params.toString();
-        const path = form.getAttribute("action") || location.pathname;
-        go(qs ? `${path}?${qs}` : path);
-    };
-    root.querySelector(".toolbar-lang")?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        navigateLang();
-    });
-    root.querySelectorAll("[data-lang-select], [data-tlang-select]").forEach((el) => {
-        el.addEventListener("change", navigateLang);
-    });
-    const setTrim = (fromSec, toSec) => {
-        if (fromInp) fromInp.value = fromSec > 0 ? String(fromSec) : "";
-        if (toInp) toInp.value = toSec > 0 ? String(toSec) : "";
-        applyFilters();
-    };
-    root.querySelectorAll("[data-skip-intro]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const n = Number(btn.getAttribute("data-skip-intro") || 0);
-            const toSec = Number(toInp?.value || 0);
-            setTrim(n, toSec);
-            setStatus(`Skipped the first ${n} seconds.`);
-            setTimeout(() => setStatus(""), 1600);
-        });
-    });
-    root.querySelectorAll("[data-skip-outro]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const n = Number(btn.getAttribute("data-skip-outro") || 0);
-            const max = Math.floor(durationMs() / 1000);
-            const end = Math.max(Number(fromInp?.value || 0), max - n);
-            setTrim(Number(fromInp?.value || 0), end);
-            setStatus(`Skipped the last ${n} seconds.`);
-            setTimeout(() => setStatus(""), 1600);
-        });
-    });
-    root.querySelector("[data-clear-trim]")?.addEventListener("click", () => {
-        rangePick = null;
-        pickRange = false;
-        pickBtn?.setAttribute("aria-pressed", "false");
-        pickBtn?.classList.remove("is-on");
-        setTrim(0, 0);
-        setStatus("Trim cleared.");
-        setTimeout(() => setStatus(""), 1400);
-    });
-    pickBtn?.addEventListener("click", () => {
-        pickRange = !pickRange;
-        rangePick = null;
-        pickBtn.setAttribute("aria-pressed", pickRange ? "true" : "false");
-        pickBtn.classList.toggle("is-on", pickRange);
-        setStatus(pickRange ? "Click a start line, then an end line." : "");
-        if (!pickRange) setTimeout(() => setStatus(""), 400);
-    });
-    const setEditing = (on) => {
-        root.classList.toggle("is-editing", on);
-        editBtn?.setAttribute("aria-pressed", on ? "true" : "false");
-        editBtn?.classList.toggle("is-on", on);
-        list?.querySelectorAll("[data-cue-text]").forEach((span) => {
-            span.contentEditable = on ? "true" : "false";
-            span.spellcheck = true;
-        });
-        setStatus(on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
-        if (!on) setTimeout(() => setStatus(""), 1600);
-    };
-    editBtn?.addEventListener("click", () => setEditing(!root.classList.contains("is-editing")));
-    list?.addEventListener("input", (e) => {
-        const span = e.target.closest?.("[data-cue-text]");
-        const cueEl = span?.closest(".cue");
-        if (!cueEl) return;
-        const ms = Number(cueEl.dataset.ms || 0);
-        const text = span.textContent || "";
-        cueEl.dataset.text = text;
-        const cue = data.cues.find((c) => c.start_ms === ms);
-        if (cue) cue.text = text;
-        saveEdits();
-    });
-    const applyBtn = root.querySelector("[data-apply]");
-    if (applyBtn) applyBtn.hidden = true;
-    root.dataset.ready = "1";
-    root.querySelector("[data-play]")?.addEventListener("click", () => mountPlayer(0));
-    const cueFromEvent = (e) => {
-        const el = e.target instanceof Element ? e.target : e.target?.parentElement;
-        return el?.closest?.(".cue");
-    };
-    list?.addEventListener("click", (e) => {
-        const a = cueFromEvent(e);
-        if (!a) return;
-        e.preventDefault();
-        if (root.classList.contains("is-editing") && e.target.closest("[data-cue-text]")) return;
-        const ms = Number(a.dataset.ms || 0);
-        if (pickRange) {
-            if (rangePick == null) {
-                rangePick = ms;
-                if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
-                applyFilters();
-                setStatus("Now click the last line to keep.");
+
+    if (!window.__yttForgeUi) {
+        window.__yttForgeUi = true;
+        window.__yttForgeState = { pickRange: false, rangePick: null, player: null, playerP: null, pendingMs: 0, vid: "" };
+        const prompts = {
+            summary: "Summarize this YouTube transcript in 8 tight bullets. Keep names, numbers, and claims. Then give a 2-sentence overview.\n\n",
+            notes: "Turn this transcript into structured study notes with headings, key points, and a short glossary of terms.\n\n",
+            quiz: "Create 8 mixed quiz questions (multiple choice + short answer) from this transcript, with an answer key at the end.\n\n",
+            quotes: "Extract the strongest quotes from this transcript. For each, add a one-line why-it-matters.\n\n",
+        };
+        document.addEventListener("click", (e) => {
+            const t = e.target instanceof Element ? e.target : e.target?.parentElement;
+            if (!t?.closest) return;
+            const ws = t.closest("#ytt-ws") || liveWorkspace();
+            const S = window.__yttForgeState;
+            const tab = t.closest("[data-mode-tab]");
+            if (tab && ws && !t.closest("[data-audio]")) {
+                const mode = tab.getAttribute("data-mode-tab") || "text";
+                if (mode === "audio") {
+                    paintMode(ws, "audio");
+                    const audio = ws.querySelector("[data-audio]");
+                    if (audio && tab !== audio) {
+                        e.preventDefault();
+                        audio.click();
+                    }
+                    return;
+                }
+                e.preventDefault();
+                paintMode(ws, mode);
+                if (mode === "srt") {
+                    downloadFmt(ws, "srt");
+                    ws.querySelector('[data-dl="srt"]')?.focus();
+                } else if (mode === "translate") {
+                    ws.querySelector("[data-tlang-select]")?.focus();
+                } else if (mode === "summary") {
+                    ws.querySelector(".recap")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                } else {
+                    ws.querySelector("[data-search]")?.focus();
+                }
                 return;
             }
-            let start = rangePick;
-            let end = ms;
-            if (end < start) { const t = start; start = end; end = t; }
-            setTrim(Math.floor(start / 1000), Math.floor(end / 1000));
-            rangePick = null;
-            pickRange = false;
-            pickBtn?.setAttribute("aria-pressed", "false");
-            pickBtn?.classList.remove("is-on");
-            setStatus("Range set. Copy and downloads use these lines.");
-            setTimeout(() => setStatus(""), 2000);
-            return;
-        }
-        mountPlayer(ms);
-    });
-    list?.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        const cue = cueFromEvent(e);
-        if (!cue) return;
-        if (root.classList.contains("is-editing") && e.target.closest("[data-cue-text]")) return;
-        e.preventDefault();
-        cue.click();
-    });
-    root.querySelector("[data-chapters]")?.addEventListener("click", (e) => {
-        const a = e.target.closest("a[data-ms]");
-        if (!a) return;
-        e.preventDefault();
-        mountPlayer(Number(a.dataset.ms || 0));
-    });
-    search?.addEventListener("input", applyFilters);
-    fromInp?.addEventListener("input", applyFilters);
-    toInp?.addEventListener("input", applyFilters);
-    root.querySelectorAll("[data-dl]").forEach((btn) => {
-        btn.addEventListener("click", () => download(btn.getAttribute("data-dl")));
-    });
-    root.querySelectorAll("[data-prompt]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-            const kind = btn.getAttribute("data-prompt");
-            const text = visibleCues().map((c) => c.text).join("\n");
-            if (!text.trim()) {
-                setStatus("Nothing to copy — clear the search or widen the time range.");
-                setTimeout(() => setStatus(""), 2200);
+            if (!ws) return;
+            if (t.closest("[data-play]")) {
+                e.preventDefault();
+                mountPlayer(ws, 0);
                 return;
             }
-            const prompts = {
-                summary: "Summarize this YouTube transcript in 8 tight bullets. Keep names, numbers, and claims. Then give a 2-sentence overview.\n\n",
-                notes: "Turn this transcript into structured study notes with headings, key points, and a short glossary of terms.\n\n",
-                quiz: "Create 8 mixed quiz questions (multiple choice + short answer) from this transcript, with an answer key at the end.\n\n",
-                quotes: "Extract the strongest quotes from this transcript. For each, add a one-line why-it-matters.\n\n",
-            };
-            const body = (prompts[kind] || prompts.summary) + text;
-            try {
-                await writeClipboard(body);
-                setStatus("Prompt copied — paste it into any AI chat.");
-            } catch { setStatus("Could not copy the prompt."); }
-            setTimeout(() => setStatus(""), 2200);
-        });
-    });
-    const another = root.querySelector("[data-another]");
-    another?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const input = another.querySelector('input[name="url"]');
-        const err = another.querySelector("[data-another-error]");
-        const id = parseId(input?.value);
-        if (!id) {
-            if (err) {
-                err.hidden = false;
-                err.textContent = "That does not look like a YouTube link.";
+            const dl = t.closest("[data-dl]");
+            if (dl) {
+                e.preventDefault();
+                downloadFmt(ws, dl.getAttribute("data-dl"));
+                return;
             }
-            input?.focus();
-            return;
-        }
-        if (err) err.hidden = true;
-        go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(root.dataset.mode || "text"));
-    });
-    document.addEventListener("keydown", (e) => {
-        const tag = document.activeElement?.tagName;
-        if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !document.activeElement?.isContentEditable) {
-            e.preventDefault();
-            search?.focus();
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-            e.preventDefault();
-            search?.focus();
-        }
-    });
+            const promptBtn = t.closest("[data-prompt]");
+            if (promptBtn) {
+                e.preventDefault();
+                const kind = promptBtn.getAttribute("data-prompt");
+                const text = visibleCues(ws).map((c) => c.text).join("\n");
+                if (!text.trim()) {
+                    setStatus(ws, "Nothing to copy — clear the search or widen the time range.");
+                    return;
+                }
+                const body = (prompts[kind] || prompts.summary) + text;
+                Promise.resolve(writeClipboard(body)).then(() => setStatus(ws, "Prompt copied — paste it into any AI chat.")).catch(() => setStatus(ws, "Could not copy the prompt."));
+                return;
+            }
+            const skipIntro = t.closest("[data-skip-intro]");
+            if (skipIntro) {
+                const n = Number(skipIntro.getAttribute("data-skip-intro") || 0);
+                const fromInp = ws.querySelector("[data-from]");
+                if (fromInp) fromInp.value = String(n);
+                applyFilters(ws);
+                setStatus(ws, `Skipped the first ${n} seconds.`);
+                return;
+            }
+            const skipOutro = t.closest("[data-skip-outro]");
+            if (skipOutro) {
+                const n = Number(skipOutro.getAttribute("data-skip-outro") || 0);
+                const max = Math.floor(durationMs(ws) / 1000);
+                const fromInp = ws.querySelector("[data-from]");
+                const toInp = ws.querySelector("[data-to]");
+                const end = Math.max(Number(fromInp?.value || 0), max - n);
+                if (toInp) toInp.value = String(end);
+                applyFilters(ws);
+                setStatus(ws, `Skipped the last ${n} seconds.`);
+                return;
+            }
+            if (t.closest("[data-clear-trim]")) {
+                S.rangePick = null;
+                S.pickRange = false;
+                const pickBtn = ws.querySelector("[data-pick-range]");
+                pickBtn?.setAttribute("aria-pressed", "false");
+                pickBtn?.classList.remove("is-on");
+                const fromInp = ws.querySelector("[data-from]");
+                const toInp = ws.querySelector("[data-to]");
+                if (fromInp) fromInp.value = "";
+                if (toInp) toInp.value = "";
+                applyFilters(ws);
+                setStatus(ws, "Trim cleared.");
+                return;
+            }
+            const pickBtn = t.closest("[data-pick-range]");
+            if (pickBtn) {
+                S.pickRange = !S.pickRange;
+                S.rangePick = null;
+                pickBtn.setAttribute("aria-pressed", S.pickRange ? "true" : "false");
+                pickBtn.classList.toggle("is-on", S.pickRange);
+                setStatus(ws, S.pickRange ? "Click a start line, then an end line." : "");
+                return;
+            }
+            const editBtn = t.closest("[data-edit]");
+            if (editBtn) {
+                const on = !ws.classList.contains("is-editing");
+                ws.classList.toggle("is-editing", on);
+                editBtn.setAttribute("aria-pressed", on ? "true" : "false");
+                editBtn.classList.toggle("is-on", on);
+                ws.querySelectorAll("[data-cue-text]").forEach((span) => {
+                    span.contentEditable = on ? "true" : "false";
+                    span.spellcheck = true;
+                });
+                setStatus(ws, on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
+                return;
+            }
+            const chapter = t.closest("[data-chapters] a[data-ms]");
+            if (chapter) {
+                e.preventDefault();
+                mountPlayer(ws, Number(chapter.dataset.ms || 0));
+                return;
+            }
+            const cue = t.closest(".cue");
+            if (cue && ws.contains(cue)) {
+                if (ws.classList.contains("is-editing") && t.closest("[data-cue-text]")) return;
+                e.preventDefault();
+                const ms = Number(cue.dataset.ms || 0);
+                const fromInp = ws.querySelector("[data-from]");
+                const toInp = ws.querySelector("[data-to]");
+                const pick = ws.querySelector("[data-pick-range]");
+                if (S.pickRange) {
+                    if (S.rangePick == null) {
+                        S.rangePick = ms;
+                        if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
+                        applyFilters(ws);
+                        setStatus(ws, "Now click the last line to keep.");
+                        return;
+                    }
+                    let start = S.rangePick;
+                    let end = ms;
+                    if (end < start) { const tmp = start; start = end; end = tmp; }
+                    if (fromInp) fromInp.value = String(Math.floor(start / 1000));
+                    if (toInp) toInp.value = String(Math.floor(end / 1000));
+                    S.rangePick = null;
+                    S.pickRange = false;
+                    pick?.setAttribute("aria-pressed", "false");
+                    pick?.classList.remove("is-on");
+                    applyFilters(ws);
+                    setStatus(ws, "Range set. Copy and downloads use these lines.");
+                    return;
+                }
+                mountPlayer(ws, ms);
+            }
+        });
+        document.addEventListener("submit", (e) => {
+            const form = e.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            const ws = form.closest("#ytt-ws") || liveWorkspace();
+            if (!ws) return;
+            if (form.classList.contains("toolbar-lang")) {
+                e.preventDefault();
+                go(langHref(ws));
+                return;
+            }
+            if (form.hasAttribute("data-another")) {
+                e.preventDefault();
+                const input = form.querySelector('input[name="url"]');
+                const err = form.querySelector("[data-another-error]");
+                const id = parseId(input?.value);
+                if (!id) {
+                    if (err) { err.hidden = false; err.textContent = "That does not look like a YouTube link."; }
+                    input?.focus();
+                    return;
+                }
+                if (err) err.hidden = true;
+                go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(ws.dataset.mode || "text"));
+            }
+        });
+        document.addEventListener("change", (e) => {
+            const t = e.target;
+            if (!(t instanceof Element)) return;
+            const ws = t.closest("#ytt-ws");
+            if (!ws) return;
+            if (t.matches("[data-lang-select], [data-tlang-select]")) go(langHref(ws));
+        });
+        document.addEventListener("input", (e) => {
+            const t = e.target;
+            if (!(t instanceof Element)) return;
+            const ws = t.closest("#ytt-ws");
+            if (!ws) return;
+            if (t.matches("[data-search], [data-from], [data-to]")) applyFilters(ws);
+            const span = t.closest("[data-cue-text]");
+            const cueEl = span?.closest(".cue");
+            if (!cueEl) return;
+            const ms = Number(cueEl.dataset.ms || 0);
+            const text = span.textContent || "";
+            cueEl.dataset.text = text;
+            const dataNow = wsData(ws);
+            const cue = dataNow.cues.find((c) => c.start_ms === ms);
+            if (cue) cue.text = text;
+            const el = ws.querySelector("#ytt-data");
+            if (el) el.textContent = JSON.stringify(dataNow);
+            const map = {};
+            for (const c of dataNow.cues) map[c.start_ms] = c.text;
+            try { localStorage.setItem("youtubetotext-edits-" + (ws.dataset.vid || ""), JSON.stringify(map)); } catch (_) {}
+        });
+        document.addEventListener("keydown", (e) => {
+            const ws = liveWorkspace();
+            if (!ws) return;
+            const tag = document.activeElement?.tagName;
+            if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !document.activeElement?.isContentEditable) {
+                e.preventDefault();
+                ws.querySelector("[data-search]")?.focus();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                ws.querySelector("[data-search]")?.focus();
+            }
+            if ((e.key === "Enter" || e.key === " ") && document.activeElement?.classList?.contains("cue")) {
+                if (ws.classList.contains("is-editing") && document.activeElement.closest("[data-cue-text]")) return;
+                e.preventDefault();
+                document.activeElement.click();
+            }
+        });
+    }
 })
 "##
     );
 
     view! {
-        <div id="ytt-ws" class={ws_class} data-vid={video_id.clone()} data-lang={lang} data-duration={duration_attr} data-mode={mode_slug}>
+        <div id="ytt-ws" class={ws_class} data-vid={video_id.clone()} data-lang={lang} data-duration={duration_attr} data-mode={mode_slug.clone()}>
             {View::raw(format!(
                 r#"<script type="application/json" id="ytt-data">{json}</script>"#
             ))}
+            {tabs}
             <aside class="player-col">
                 <div class="player-card">
                     <div class="player-facade" data-player="">
@@ -667,7 +759,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
                     </p>
                     <p>
-                        <a class="btn btn-primary" href={audio_href}>"Download audio"</a>
+                        <a class="btn btn-primary" href={audio_href.clone()} data-audio="">"Download audio"</a>
                     </p>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
@@ -693,6 +785,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             </aside>
             <section class="transcript-col">
                 <form class="toolbar toolbar-lang" method="get" action={action}>
+                    <input type="hidden" name="v" value={video_id.clone()} />
+                    <input type="hidden" name="mode" value={mode_slug.clone()} />
                     <label>
                         "Captions"
                         <select name="lang" data-lang-select="">{track_options}</select>
