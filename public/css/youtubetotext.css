@@ -362,6 +362,19 @@ h3 {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+.hero-dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: stretch;
+  margin-top: 0.7rem;
+}
+
+.hero-dl .btn {
+  flex: 1 1 9.5rem;
+  justify-content: center;
+}
+
 .hint {
   margin: 0.55rem 0 0;
   color: var(--muted);
@@ -1603,6 +1616,11 @@ select:focus-visible {
   .hero-field .btn {
     width: 100%;
     flex: 1 1 auto;
+  }
+
+  .hero-dl .media-dl-qwrap,
+  .hero-dl .btn {
+    flex: 1 1 100%;
   }
 
   .player-card,

@@ -82,9 +82,79 @@ pub fn home_search(mode: Mode) -> View {
                 const t = await navigator.clipboard.readText();
                 if (input) input.value = t.trim();
                 input?.focus();
+                syncDlHrefs();
             } catch (_) {}
         });
     }
+    const needId = () => {
+        const id = parseId(input?.value);
+        if (!id) {
+            if (err) {
+                err.hidden = false;
+                err.textContent = "Paste a YouTube link first.";
+            }
+            input?.setAttribute("aria-invalid", "true");
+            input?.focus();
+            return null;
+        }
+        if (err) err.hidden = true;
+        input?.removeAttribute("aria-invalid");
+        return id;
+    };
+    const syncDlHrefs = () => {
+        const id = parseId(input?.value);
+        const q = root.querySelector("[data-vq]")?.value || "720";
+        const video = root.querySelector("[data-home-video]");
+        const audio = root.querySelector("[data-home-audio]");
+        if (video) video.href = id ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}` : "/api/video";
+        if (audio) audio.href = id ? `/api/audio?v=${encodeURIComponent(id)}` : "/api/audio";
+    };
+    const armVideoDialog = (dlg) => {
+        if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
+        dlg.dataset.ready = "1";
+        if (!("closedBy" in HTMLDialogElement.prototype)) {
+            dlg.addEventListener("click", (event) => {
+                if (event.target !== dlg) return;
+                const rect = dlg.getBoundingClientRect();
+                const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height
+                    && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
+                if (!inside) dlg.close();
+            });
+        }
+    };
+    const startFileDownload = (href, withModal) => {
+        if (withModal) {
+            const dlg = root.querySelector("[data-video-dlg]");
+            armVideoDialog(dlg);
+            if (dlg instanceof HTMLDialogElement && typeof dlg.showModal === "function") dlg.showModal();
+        }
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = "";
+        a.rel = "noopener";
+        a.setAttribute("data-r-full", "");
+        a.style.display = "none";
+        document.body.append(a);
+        a.click();
+        a.remove();
+    };
+    input?.addEventListener("input", syncDlHrefs);
+    root.querySelector("[data-vq]")?.addEventListener("change", syncDlHrefs);
+    root.querySelector("[data-home-video]")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        const id = needId();
+        if (!id) return;
+        syncDlHrefs();
+        startFileDownload(root.querySelector("[data-home-video]")?.href || "", true);
+    });
+    root.querySelector("[data-home-audio]")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        const id = needId();
+        if (!id) return;
+        syncDlHrefs();
+        startFileDownload(root.querySelector("[data-home-audio]")?.href || "", false);
+    });
+    syncDlHrefs();
     form?.addEventListener("submit", async (e) => {
         const hp = form.querySelector('[name="website"]');
         if (hp && String(hp.value || "").trim()) {
@@ -180,11 +250,33 @@ pub fn home_search(mode: Mode) -> View {
                         <button type="submit" class="btn btn-primary">{cta}</button>
                     </span>
                 </label>
+                <div class="hero-dl">
+                    <label class="media-dl-qwrap">
+                        <span>"Quality"</span>
+                        <select class="media-dl-q" data-vq="" aria-label="Video quality">
+                            <option value="360">"360p"</option>
+                            <option value="480">"480p"</option>
+                            <option value="720" selected=true>"720p"</option>
+                            <option value="1080">"1080p"</option>
+                            <option value="best">"Best"</option>
+                        </select>
+                    </label>
+                    <a class="btn btn-secondary" href="/api/video" download="" data-r-full="" data-home-video="">"Download video"</a>
+                    <a class="btn btn-ghost" href="/api/audio" download="" data-r-full="" data-home-audio="">"Download audio"</a>
+                </div>
                 {ts_block}
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>
                 <p id="url-error" class="hint form-error" data-form-error="" hidden="" role="alert"></p>
             </Form>
             <div class="recents" data-recents="" hidden=""></div>
+            <dialog class="dl-dialog" data-video-dlg="" closedby="any" aria-labelledby="ytt-home-vdl-title">
+                <h2 id="ytt-home-vdl-title">"Your video is downloading"</h2>
+                <p>"The file will save to your downloads folder. Higher qualities can take a minute."</p>
+                {crate::ads::slot("home-video-dl", "rectangle")}
+                <form method="dialog">
+                    <button type="submit" class="btn btn-primary">"Got it"</button>
+                </form>
+            </dialog>
         </div>
     }
 }
