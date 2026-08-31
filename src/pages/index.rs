@@ -115,7 +115,7 @@ fn fail_view(message: String, retry: String, vid: String) -> View {
             <p class="error-actions">
                 <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
                 <NavLink href="/" class="btn btn-ghost">"Another link"</NavLink>
-                <a class="btn btn-ghost" href={audio}>"Download audio anyway"</a>
+                <a class="btn btn-ghost" href={audio} download="" data-r-full="">"Download audio anyway"</a>
             </p>
         </main>
     }

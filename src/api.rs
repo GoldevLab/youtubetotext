@@ -5,7 +5,6 @@ use axum::extract::Query;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use futures_util::TryStreamExt;
 use serde::Deserialize;
 
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
@@ -123,7 +122,7 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
         .into_response();
     };
     match download_audio(&id).await {
-        Ok((pick, yt)) => {
+        Ok((pick, len, stream)) => {
             let filename = safe_audio_name(&pick.title, &id, &pick.ext);
             let mut builder = Response::builder().status(StatusCode::OK);
             let mime = if pick.mime.is_empty() {
@@ -141,15 +140,14 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
                 format!("attachment; filename=\"{filename}\""),
             );
             builder = builder.header(header::CACHE_CONTROL, "private, max-age=120");
-            if let Some(len) = yt.content_length() {
+            if len > 0 {
                 builder = builder.header(header::CONTENT_LENGTH, len);
             }
-            let stream = yt
-                .bytes_stream()
-                .map_err(|e| std::io::Error::other(e.to_string()));
-            builder.body(Body::from_stream(stream)).unwrap_or_else(|_| {
-                json_error(StatusCode::BAD_GATEWAY, "Could not stream audio.").into_response()
-            })
+            builder
+                .body(Body::from_stream(stream))
+                .unwrap_or_else(|_| {
+                    json_error(StatusCode::BAD_GATEWAY, "Could not stream audio.").into_response()
+                })
         }
         Err(e) => {
             let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);

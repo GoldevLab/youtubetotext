@@ -1,6 +1,7 @@
 //! Fetch public YouTube captions in pure Rust (InnerTube + timedtext).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
@@ -10,6 +11,13 @@ use serde_json::{json, Value};
 
 use crate::langs::{language_name, translation_catalog};
 use crate::parse::is_id;
+use bytes::Bytes;
+use futures_util::stream::{self, Stream, StreamExt};
+use std::env;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::process::Stdio;
 
 const VR_UA: &str = "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip";
 const IOS_UA: &str = "com.google.ios.youtube/20.11.6 (iPhone14,5; U; CPU iOS 18_5 like Mac OS X;)";
@@ -37,14 +45,27 @@ fn http_client(cookies: bool) -> reqwest::Client {
 static HTTP_VR: Lazy<reqwest::Client> = Lazy::new(|| http_client(false));
 /// Watch-page fallback — browser cookies only.
 static HTTP_WEB: Lazy<reqwest::Client> = Lazy::new(|| http_client(true));
+/// googlevideo: HTTP/1, no keep-alive. HTTP/2 reuse hangs the second Range request.
+static HTTP_GV: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(8))
+        .gzip(true)
+        .http1_only()
+        .pool_max_idle_per_host(0)
+        .tcp_nodelay(true)
+        .build()
+        .expect("gv http")
+});
 
 static CACHE: Lazy<Mutex<Vec<(String, Instant, Arc<TranscriptDoc>)>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
-static AUDIO_CACHE: Lazy<Mutex<Vec<(String, Instant, AudioPick)>>> =
+static AUDIO_CACHE: Lazy<Mutex<Vec<(String, Instant, Vec<AudioPick>)>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
 /// Skip timedtext after a 429 so we do not make the ban worse.
 static RATE_LIMIT_UNTIL: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(45);
+static SKIP_GTX: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
 pub struct FetchError {
@@ -135,6 +156,7 @@ pub struct AudioPick {
     pub ext: String,
     pub url: String,
     pub bitrate: u64,
+    pub ua: String,
 }
 
 #[resuma::data]
@@ -437,7 +459,7 @@ async fn player_bundle(
                         chapters = ch;
                     }
                 }
-                merge_audio(&mut audios, extract_audio(&player));
+                merge_audio(&mut audios, extract_audio(&player, client.ua));
             }
         }
         if let Ok(player) = watch_page_player(video_id, hl).await {
@@ -450,7 +472,7 @@ async fn player_bundle(
                     chapters = ch;
                 }
             }
-            merge_audio(&mut audios, extract_audio(&player));
+            merge_audio(&mut audios, extract_audio(&player, WEB_UA));
         }
         if tracks.iter().any(|t| !needs_pot(&t.base_url)) && best_audio(&audios).is_some() {
             break;
@@ -463,15 +485,8 @@ async fn player_bundle(
             "Could not read this video. It may be private, age-restricted, or removed.",
         ));
     };
-    if let Some(pick) = best_audio(&audios) {
-        cache_audio(AudioPick {
-            video_id: video_id.to_string(),
-            title: meta.title.clone(),
-            mime: pick.mime,
-            ext: pick.ext,
-            url: pick.url,
-            bitrate: pick.bitrate,
-        });
+    if !audios.is_empty() {
+        cache_audios(video_id, &meta.title, audios);
     }
     Ok((meta, tracks, chapters))
 }
@@ -1539,10 +1554,13 @@ async fn gtx_text(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> 
     if text.trim().is_empty() {
         return Ok(text.to_string());
     }
-    match gtx_text_once(sl, tl, text).await {
-        Ok(s) => Ok(s),
-        Err(_) => mymemory_text(sl, tl, text).await,
+    if !SKIP_GTX.load(Ordering::Relaxed) {
+        match gtx_text_once(sl, tl, text).await {
+            Ok(s) => return Ok(s),
+            Err(_) => SKIP_GTX.store(true, Ordering::Relaxed),
+        }
     }
+    mymemory_text(sl, tl, text).await
 }
 
 async fn gtx_text_once(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> {
@@ -1640,16 +1658,17 @@ struct RawAudio {
     url: String,
     bitrate: u64,
     itag: u64,
+    ua: String,
 }
 
-fn extract_audio(player: &Value) -> Vec<RawAudio> {
+fn extract_audio(player: &Value, ua: &str) -> Vec<RawAudio> {
     let mut out = Vec::new();
     for key in ["/streamingData/adaptiveFormats", "/streamingData/formats"] {
         let Some(arr) = player.pointer(key).and_then(|v| v.as_array()) else {
             continue;
         };
         for item in arr {
-            if let Some(a) = raw_audio_from_item(item) {
+            if let Some(a) = raw_audio_from_item(item, ua) {
                 out.push(a);
             }
         }
@@ -1657,7 +1676,7 @@ fn extract_audio(player: &Value) -> Vec<RawAudio> {
     out
 }
 
-fn raw_audio_from_item(item: &Value) -> Option<RawAudio> {
+fn raw_audio_from_item(item: &Value, ua: &str) -> Option<RawAudio> {
     let mime = item.get("mimeType").and_then(|v| v.as_str()).unwrap_or("");
     if !mime.to_ascii_lowercase().starts_with("audio/") {
         return None;
@@ -1678,6 +1697,7 @@ fn raw_audio_from_item(item: &Value) -> Option<RawAudio> {
         url: url.to_string(),
         bitrate,
         itag,
+        ua: ua.to_string(),
     })
 }
 
@@ -1704,7 +1724,9 @@ fn audio_rank(a: &RawAudio) -> (u8, u64) {
 
 fn merge_audio(into: &mut Vec<RawAudio>, extra: Vec<RawAudio>) {
     for t in extra {
-        if let Some(existing) = into.iter_mut().find(|e| e.itag == t.itag && e.ext == t.ext) {
+        if let Some(existing) = into.iter_mut().find(|e| {
+            e.itag == t.itag && e.ext == t.ext && e.ua == t.ua
+        }) {
             if audio_rank(&t) > audio_rank(existing) {
                 *existing = t;
             }
@@ -1718,17 +1740,38 @@ fn best_audio(audios: &[RawAudio]) -> Option<RawAudio> {
     audios.iter().max_by_key(|a| audio_rank(a)).cloned()
 }
 
-fn cache_audio(pick: AudioPick) {
+fn cache_audios(video_id: &str, title: &str, mut audios: Vec<RawAudio>) {
+    audios.sort_by(|a, b| audio_rank(b).cmp(&audio_rank(a)));
+    let picks: Vec<AudioPick> = audios
+        .into_iter()
+        .map(|a| AudioPick {
+            video_id: video_id.to_string(),
+            title: title.to_string(),
+            mime: a.mime,
+            ext: a.ext,
+            url: a.url,
+            bitrate: a.bitrate,
+            ua: a.ua,
+        })
+        .collect();
+    if picks.is_empty() {
+        return;
+    }
     let mut g = AUDIO_CACHE.lock();
     g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
-    g.retain(|(id, _, _)| id != &pick.video_id);
+    g.retain(|(id, _, _)| id != video_id);
     if g.len() >= CACHE_CAP {
         g.remove(0);
     }
-    g.push((pick.video_id.clone(), Instant::now(), pick));
+    g.push((video_id.to_string(), Instant::now(), picks));
 }
 
-fn audio_cache_get(video_id: &str) -> Option<AudioPick> {
+#[allow(dead_code)]
+fn audio_cache_drop(video_id: &str) {
+    AUDIO_CACHE.lock().retain(|(id, _, _)| id != video_id);
+}
+
+fn audio_cache_get(video_id: &str) -> Option<Vec<AudioPick>> {
     let mut g = AUDIO_CACHE.lock();
     g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
     g.iter()
@@ -1736,46 +1779,285 @@ fn audio_cache_get(video_id: &str) -> Option<AudioPick> {
         .map(|(_, _, d)| d.clone())
 }
 
+fn audio_missing() -> FetchError {
+    FetchError::new(
+        404,
+        "YouTube did not expose a plain audio URL for this video (it may need a signature). Try another public video.",
+    )
+}
+
 pub async fn pick_audio(video_id: &str) -> Result<AudioPick, FetchError> {
+    let picks = load_audio_picks(video_id).await?;
+    picks.into_iter().next().ok_or_else(audio_missing)
+}
+
+async fn load_audio_picks(video_id: &str) -> Result<Vec<AudioPick>, FetchError> {
     if !is_id(video_id) {
         return Err(FetchError::new(400, "That is not a YouTube video id."));
     }
     if let Some(hit) = audio_cache_get(video_id) {
-        return Ok(hit);
+        if !hit.is_empty() {
+            return Ok(hit);
+        }
     }
-    let _ = player_bundle(video_id).await?;
-    audio_cache_get(video_id).ok_or_else(|| {
-        FetchError::new(
-            404,
-            "YouTube did not expose a plain audio URL for this video (it may need a signature). Try another public video.",
-        )
+    fill_audio_cache(video_id).await?;
+    audio_cache_get(video_id)
+        .filter(|v| !v.is_empty())
+        .ok_or_else(audio_missing)
+}
+
+async fn fill_audio_cache(video_id: &str) -> Result<(), FetchError> {
+    let clients = listing_clients();
+    let mut audios: Vec<RawAudio> = Vec::new();
+    let mut title = String::new();
+    // iOS googlevideo URLs accept 1 MiB ranges; try that client first.
+    for idx in [1usize, 0, 2, 3] {
+        let client = &clients[idx];
+        let Ok(player) = innertube_player(video_id, client, "en").await else {
+            continue;
+        };
+        if title.is_empty() {
+            if let Some(t) = json_text(player.pointer("/videoDetails/title")) {
+                title = t;
+            }
+        }
+        merge_audio(&mut audios, extract_audio(&player, client.ua));
+        if !audios.is_empty() {
+            let label = if title.is_empty() { video_id } else { title.as_str() };
+            cache_audios(video_id, label, audios);
+            return Ok(());
+        }
+    }
+    if let Ok(player) = watch_page_player(video_id, "en").await {
+        if title.is_empty() {
+            if let Some(t) = json_text(player.pointer("/videoDetails/title")) {
+                title = t;
+            }
+        }
+        merge_audio(&mut audios, extract_audio(&player, WEB_UA));
+    }
+    if audios.is_empty() {
+        return Err(audio_missing());
+    }
+    let label = if title.is_empty() { video_id } else { title.as_str() };
+    cache_audios(video_id, label, audios);
+    Ok(())
+}
+
+async fn range_get(url: &str, ua: &str, start: u64, end: u64) -> Result<reqwest::Response, FetchError> {
+    HTTP_GV
+        .get(url)
+        .header("User-Agent", ua)
+        .header("Accept", "*/*")
+        .header("Range", format!("bytes={start}-{end}"))
+        .header("Connection", "close")
+        .send()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Audio download failed ({e}).")))
+}
+
+fn content_range_total(resp: &reqwest::Response) -> Option<u64> {
+    resp.headers()
+        .get("content-range")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.rsplit('/').next())
+        .and_then(|s| s.parse().ok())
+}
+
+/// googlevideo 403s open-ended and large Range requests; ~1 MiB slices work.
+const GV_CHUNK: u64 = 1024 * 1024;
+const GV_MAX: u64 = 80 * 1024 * 1024;
+
+pub type AudioByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
+
+fn rest_audio_chunks(
+    url: String,
+    ua: String,
+    off: u64,
+    total: u64,
+) -> impl Stream<Item = Result<Bytes, io::Error>> + Send {
+    stream::unfold(off, move |off| {
+        let url = url.clone();
+        let ua = ua.clone();
+        async move {
+            if off >= total {
+                return None;
+            }
+            let end = (off + GV_CHUNK - 1).min(total - 1);
+            let mut last_err = None;
+            for _ in 0..3u8 {
+                match range_get(&url, &ua, off, end).await {
+                    Ok(resp) if resp.status().as_u16() < 400 => match resp.bytes().await {
+                        Ok(b) => {
+                            let n = b.len() as u64;
+                            if n == 0 {
+                                return None;
+                            }
+                            return Some((Ok(b), off + n));
+                        }
+                        Err(e) => last_err = Some(io::Error::other(e.to_string())),
+                    },
+                    Ok(resp) => {
+                        last_err = Some(io::Error::other(format!("YouTube {}", resp.status())));
+                    }
+                    Err(e) => last_err = Some(io::Error::other(e.message)),
+                }
+            }
+            Some((
+                Err(last_err.unwrap_or_else(|| io::Error::other("audio chunk failed"))),
+                total,
+            ))
+        }
     })
+}
+
+async fn open_audio_stream(url: &str, ua: &str) -> Result<(u64, AudioByteStream), FetchError> {
+    let probe = range_get(url, ua, 0, 1023).await?;
+    let status = probe.status().as_u16();
+    if status == 200 {
+        let b = probe
+            .bytes()
+            .await
+            .map_err(|e| FetchError::new(502, format!("Audio download failed ({e}).")))?;
+        let n = b.len() as u64;
+        let s = stream::once(async move { Ok::<Bytes, io::Error>(b) });
+        return Ok((n, Box::pin(s)));
+    }
+    if status >= 400 {
+        return Err(FetchError::new(
+            status,
+            "YouTube refused the audio stream. Refresh and try again.",
+        ));
+    }
+    let total = content_range_total(&probe).unwrap_or(0);
+    if total == 0 {
+        return Err(FetchError::new(502, "YouTube did not report the audio size."));
+    }
+    if total > GV_MAX {
+        return Err(FetchError::new(
+            413,
+            "That audio file is too large to proxy. Open the video on YouTube instead.",
+        ));
+    }
+    let first = probe
+        .bytes()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Audio download failed ({e}).")))?;
+    let off = first.len() as u64;
+    let s = stream::once(async move { Ok::<Bytes, io::Error>(first) }).chain(rest_audio_chunks(
+        url.to_string(),
+        ua.to_string(),
+        off,
+        total,
+    ));
+    Ok((total, Box::pin(s)))
+}
+
+fn ytdlp_path() -> Option<PathBuf> {
+    if let Ok(p) = env::var("YTDLP") {
+        let path = PathBuf::from(p);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    for candidate in ["/usr/local/bin/yt-dlp", "/usr/bin/yt-dlp", "./yt-dlp"] {
+        let path = Path::new(candidate);
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+    }
+    None
+}
+
+fn placeholder_pick(video_id: &str) -> AudioPick {
+    AudioPick {
+        video_id: video_id.to_string(),
+        title: video_id.to_string(),
+        mime: "audio/mp4".into(),
+        ext: "m4a".into(),
+        url: String::new(),
+        bitrate: 0,
+        ua: String::new(),
+    }
+}
+
+async fn peek_audio_len(url: &str, ua: &str) -> Result<u64, FetchError> {
+    let probe = range_get(url, ua, 0, 1023).await?;
+    let status = probe.status().as_u16();
+    if status == 200 {
+        return Ok(probe.content_length().unwrap_or(0));
+    }
+    if status >= 400 {
+        return Err(FetchError::new(
+            status,
+            "YouTube refused the audio stream. Refresh and try again.",
+        ));
+    }
+    content_range_total(&probe).ok_or_else(|| {
+        FetchError::new(502, "YouTube did not report the audio size.")
+    })
+}
+
+async fn stream_ytdlp(
+    video_id: &str,
+    pick: AudioPick,
+) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
+    let bin = ytdlp_path().ok_or_else(|| {
+        FetchError::new(
+            503,
+            "Audio download is not available on this server yet. Try again after the next deploy.",
+        )
+    })?;
+    let url = format!("https://www.youtube.com/watch?v={video_id}");
+    let mut child = tokio::process::Command::new(bin)
+        .args([
+            "-f",
+            "bestaudio[ext=m4a]/bestaudio/best",
+            "-o",
+            "-",
+            "--no-progress",
+            "--no-warnings",
+            "--no-playlist",
+            "--",
+            &url,
+        ])
+        .env("HOME", "/tmp")
+        .env("XDG_CACHE_HOME", "/tmp")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| FetchError::new(502, format!("Could not start audio download ({e}).")))?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        FetchError::new(502, "Could not start audio download.")
+    })?;
+    tokio::spawn(async move {
+        let _ = child.wait().await;
+    });
+    let stream = tokio_util::io::ReaderStream::new(stdout)
+        .map(|item| item.map_err(|e| io::Error::other(e.to_string())));
+    Ok((pick, 0, Box::pin(stream)))
 }
 
 pub async fn download_audio(
     video_id: &str,
-) -> Result<(AudioPick, reqwest::Response), FetchError> {
-    let pick = pick_audio(video_id).await?;
-    let resp = HTTP_VR
-        .get(&pick.url)
-        .header("User-Agent", ANDROID_UA)
-        .header("Accept", "*/*")
-        .header("Origin", "https://www.youtube.com")
-        .header("Referer", "https://www.youtube.com/")
-        .send()
-        .await
-        .map_err(|e| FetchError::new(502, format!("Audio download failed ({e}).")))?;
-    let status = resp.status().as_u16();
-    if status == 403 || status == 404 {
-        return Err(FetchError::new(
-            status,
-            "YouTube refused the audio stream. It may have expired — refresh and try again.",
-        ));
+) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
+    if !is_id(video_id) {
+        return Err(FetchError::new(400, "That is not a YouTube video id."));
     }
-    if status >= 400 {
-        return Err(FetchError::new(status, "YouTube refused the audio stream."));
+    let picks = load_audio_picks(video_id).await.unwrap_or_default();
+    for pick in &picks {
+        match peek_audio_len(&pick.url, &pick.ua).await {
+            Ok(len) if len > 0 && len <= GV_CHUNK => {
+                return open_audio_stream(&pick.url, &pick.ua)
+                    .await
+                    .map(|(n, s)| (pick.clone(), n, s));
+            }
+            _ => {}
+        }
     }
-    Ok((pick, resp))
+    let meta = picks.into_iter().next().unwrap_or_else(|| placeholder_pick(video_id));
+    stream_ytdlp(video_id, meta).await
 }
 
 /// Store a transcript fetched in the user's browser (extension / bookmarklet).
@@ -2040,9 +2322,10 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let audios = extract_audio(&v);
+        let audios = extract_audio(&v, "test-ua");
         assert_eq!(audios.len(), 1);
         assert_eq!(audios[0].ext, "m4a");
+        assert_eq!(audios[0].ua, "test-ua");
         assert_eq!(best_audio(&audios).unwrap().url, "https://x/a");
     }
 

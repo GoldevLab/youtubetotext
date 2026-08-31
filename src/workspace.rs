@@ -300,11 +300,20 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         if (countEl) countEl.textContent = q || (fromInp?.value || toInp?.value) ? `${shown} shown` : "";
     };
     const setStatus = (ws, t, holdOrMs) => {
-        const status = ws?.querySelector("[data-status]");
-        if (status) { status.textContent = t || ""; status.hidden = !t; }
+        const nodes = ws?.querySelectorAll("[data-status], [data-apply-status]") || [];
+        nodes.forEach((status) => {
+            status.textContent = t || "";
+            status.hidden = !t;
+        });
+        const applyBtn = ws?.querySelector("[data-apply]");
+        if (applyBtn && t && holdOrMs === true) applyBtn.textContent = t.length > 28 ? "Translating…" : t;
         const hold = holdOrMs === true;
-        const ms = typeof holdOrMs === "number" ? holdOrMs : 2800;
-        if (t && !hold) setTimeout(() => { if (status && status.textContent === t) { status.textContent = ""; status.hidden = true; } }, ms);
+        const ms = typeof holdOrMs === "number" ? holdOrMs : 4000;
+        if (t && !hold) setTimeout(() => {
+            nodes.forEach((status) => {
+                if (status.textContent === t) { status.textContent = ""; status.hidden = true; }
+            });
+        }, ms);
     };
     const downloadFmt = (ws, fmt) => {
         const cues = visibleCues(ws);
@@ -347,6 +356,44 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         setTimeout(() => URL.revokeObjectURL(a.href), 1500);
         setStatus(ws, `Downloaded ${name}.`);
     };
+    const downloadAudio = async (ws, href) => {
+        const btn = ws.querySelector("[data-audio]");
+        const prev = btn?.textContent || "Download audio";
+        if (btn) btn.textContent = "Downloading…";
+        setStatus(ws, "Fetching audio from YouTube…", 20000);
+        try {
+            const r = await fetch(href, { credentials: "same-origin" });
+            const ct = (r.headers.get("content-type") || "").toLowerCase();
+            if (!r.ok || ct.includes("application/json")) {
+                let msg = "YouTube refused the audio stream. Try again in a moment.";
+                try {
+                    const j = await r.json();
+                    msg = j.error || j.message || msg;
+                } catch (_) {}
+                setStatus(ws, msg, 8000);
+                return;
+            }
+            const blob = await r.blob();
+            const cd = r.headers.get("content-disposition") || "";
+            const m = /filename="?([^";]+)"?/i.exec(cd);
+            const name = m ? m[1] : `audio-${ws.dataset.vid || "yt"}.m4a`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = name;
+            a.rel = "noopener";
+            a.style.display = "none";
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            setStatus(ws, `Downloaded ${name}.`, 4000);
+        } catch (_) {
+            setStatus(ws, "Audio download failed. Try again.", 8000);
+        } finally {
+            if (btn) btn.textContent = prev;
+        }
+    };
     const sourcePayload = (ws) => {
         const el = ws.querySelector("#ytt-source");
         try { return JSON.parse(el?.textContent || "{}"); } catch (_) { return {}; }
@@ -382,42 +429,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     const storeSource = (ws, payload) => {
         const el = ws.querySelector("#ytt-source");
         if (el) el.textContent = JSON.stringify(payload);
-    };
-    const CUE_SEP = "\n\u{e000}\n";
-    const mmTranslateLines = async (sl, tl, lines, onProgress) => {
-        const out = [];
-        let batch = [];
-        let n = 0;
-        const flush = async () => {
-            if (!batch.length) return;
-            const run = async (q) => {
-                const u = "https://api.mymemory.translated.net/get?" + new URLSearchParams({ q, langpair: sl + "|" + tl });
-                const r = await fetch(u);
-                const j = await r.json();
-                const text = j && j.responseData && j.responseData.translatedText;
-                if (!r.ok || Number(j.responseStatus) !== 200 || typeof text !== "string") throw new Error("mm");
-                return text;
-            };
-            const joined = batch.join(CUE_SEP);
-            const text = await run(joined);
-            const parts = text.split(CUE_SEP);
-            if (parts.length === batch.length) {
-                out.push(...parts);
-            } else {
-                for (const line of batch) out.push(line.trim() ? await run(line) : line);
-            }
-            batch = [];
-            n = 0;
-            onProgress?.(out.length, lines.length);
-        };
-        for (const line of lines) {
-            const extra = (line || "").length + CUE_SEP.length;
-            if (batch.length && n + extra > 450) await flush();
-            batch.push(line || "");
-            n += extra;
-        }
-        await flush();
-        return out;
     };
     const paintMode = (ws, mode) => {
         if (!ws || !mode) return;
@@ -525,30 +536,18 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             }
             setStatus(ws, "Translating captions…", true);
             const sl = (lang.split(/[:|]/)[0] || "autodetect").split("-")[0] || "autodetect";
-            let next = null;
-            try {
-                const texts = await mmTranslateLines(sl, tlang, cues.map((c) => c.text || ""), (done, total) => {
-                    setStatus(ws, `Translating captions… ${done}/${total}`, true);
-                });
-                if (texts.length === cues.length) {
-                    next = cues.map((c, i) => ({ ...c, text: texts[i] }));
-                }
-            } catch (_) {}
-            if (!next) {
-                setStatus(ws, "Translating captions…", true);
-                const res = await fetch("/api/translate", {
-                    method: "POST",
-                    headers: { Accept: "application/json", "Content-Type": "application/json" },
-                    credentials: "same-origin",
-                    body: JSON.stringify({ video_id: vid, lang, tlang, cues }),
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || data.error || !Array.isArray(data.cues)) {
-                    setStatus(ws, data.error || "Could not translate those captions. Try Apply again in a minute.");
-                    return;
-                }
-                next = data.cues;
+            const res = await fetch("/api/translate", {
+                method: "POST",
+                headers: { Accept: "application/json", "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ video_id: vid, lang: sl, tlang, cues }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error || !Array.isArray(data.cues) || data.cues.length !== cues.length) {
+                setStatus(ws, data.error || "Could not translate those captions. Try Apply again in a minute.");
+                return;
             }
+            const next = data.cues;
             paintCues(ws, {
                 video_id: src.video_id || vid,
                 title: src.title || "",
@@ -562,7 +561,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         } catch (_) {
             setStatus(ws, "Could not update captions.");
         } finally {
-            if (applyBtn) applyBtn.disabled = false;
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.textContent = "Apply";
+            }
         }
     };
     const root = liveWorkspace();
@@ -691,7 +693,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
 
     window.__yttForge = {
-        applyLang, downloadFmt, mountPlayer, paintMode, applyFilters, setStatus,
+        applyLang, downloadFmt, downloadAudio, mountPlayer, paintMode, applyFilters, setStatus,
         parseId, go, visibleCues, writeClipboard, durationMs, wsData,
     };
 
@@ -734,6 +736,12 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 return;
             }
             if (!ws) return;
+            const audioBtn = t.closest("[data-audio]");
+            if (audioBtn) {
+                e.preventDefault();
+                F.downloadAudio(ws, audioBtn.getAttribute("href") || "");
+                return;
+            }
             if (t.closest("[data-apply]")) {
                 e.preventDefault();
                 F.applyLang(ws);
@@ -959,15 +967,17 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
                     </p>
                     <p>
-                        <a class="btn btn-primary" href={audio_href.clone()} data-audio="">"Download audio"</a>
+                        <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
                     </p>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">
-                        <label class="hp-field" aria-hidden="true">
-                            "Company website"
-                            <input name="website" type="text" tabindex="-1" autocomplete="off" />
-                        </label>
+                        <div class="hp-field" aria-hidden="true">
+                            <label>
+                                "Company website"
+                                <input name="website" type="text" tabindex="-1" autocomplete="off" />
+                            </label>
+                        </div>
                         <label>
                             "Another video"
                             <span class="hero-field">
@@ -1000,6 +1010,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <select name="tlang" data-tlang-select="">{tlang_options}</select>
                     </label>
                     <button type="button" class="btn btn-primary" data-apply="">"Apply"</button>
+                    <p class="hint apply-status" data-apply-status="" hidden="" role="status" aria-live="polite"></p>
                 </form>
                 <div class="toolbar">
                     <label class="grow">

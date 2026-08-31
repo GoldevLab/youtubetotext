@@ -151,15 +151,17 @@ pub fn home_search(mode: Mode) -> View {
             <Form submit={crate::actions::open_transcript} class="hero-form">
                 <input type="hidden" name="mode" value={slug} />
                 <input type="hidden" name="turnstile" value="" />
-                <label class="hp-field" aria-hidden="true">
-                    "Company website"
-                    <input
-                        name="website"
-                        type="text"
-                        tabindex="-1"
-                        autocomplete="off"
-                    />
-                </label>
+                <div class="hp-field" aria-hidden="true">
+                    <label>
+                        "Company website"
+                        <input
+                            name="website"
+                            type="text"
+                            tabindex="-1"
+                            autocomplete="off"
+                        />
+                    </label>
+                </div>
                 <label class="hero-label">
                     "YouTube link"
                     <span class="hero-field">

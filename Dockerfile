@@ -4,7 +4,12 @@ COPY . .
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && curl -L --fail -o /usr/local/bin/yt-dlp \
+        https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+    && chmod 755 /usr/local/bin/yt-dlp \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/youtubetotext /app/server
 COPY --from=builder /app/public /app/public
