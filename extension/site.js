@@ -33,7 +33,7 @@
         if (!r.ok) throw new Error("ingest");
         location.reload();
       } catch {
-        if (status) status.textContent = "Got captions but could not store them on YouTubeToText.";
+        if (status) status.textContent = "Got captions but could not store them on YouTubeForge.";
       }
     }
   );

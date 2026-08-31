@@ -40,6 +40,8 @@ static HTTP_WEB: Lazy<reqwest::Client> = Lazy::new(|| http_client(true));
 
 static CACHE: Lazy<Mutex<Vec<(String, Instant, Arc<TranscriptDoc>)>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
+static AUDIO_CACHE: Lazy<Mutex<Vec<(String, Instant, AudioPick)>>> =
+    Lazy::new(|| Mutex::new(Vec::new()));
 /// Skip timedtext after a 429 so we do not make the ban worse.
 static RATE_LIMIT_UNTIL: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(45);
@@ -122,6 +124,36 @@ impl TranscriptDoc {
 
     pub fn word_count(&self) -> usize {
         self.plain_text().split_whitespace().count()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioPick {
+    pub video_id: String,
+    pub title: String,
+    pub mime: String,
+    pub ext: String,
+    pub url: String,
+    pub bitrate: u64,
+}
+
+#[resuma::data]
+#[derive(Debug)]
+pub struct AudioMeta {
+    pub video_id: String,
+    pub title: String,
+    pub ext: String,
+    pub bitrate: u64,
+}
+
+impl AudioPick {
+    pub fn meta(&self) -> AudioMeta {
+        AudioMeta {
+            video_id: self.video_id.clone(),
+            title: self.title.clone(),
+            ext: self.ext.clone(),
+            bitrate: self.bitrate,
+        }
     }
 }
 
@@ -354,6 +386,7 @@ async fn player_bundle(
     let mut meta: Option<Meta> = None;
     let mut tracks: Vec<RemoteTrack> = Vec::new();
     let mut chapters: Vec<Chapter> = Vec::new();
+    let mut audios: Vec<RawAudio> = Vec::new();
 
     for hl in ["en", "es"] {
         for client in listing_clients() {
@@ -367,6 +400,7 @@ async fn player_bundle(
                         chapters = ch;
                     }
                 }
+                merge_audio(&mut audios, extract_audio(&player));
             }
         }
         if let Ok(player) = watch_page_player(video_id, hl).await {
@@ -379,8 +413,9 @@ async fn player_bundle(
                     chapters = ch;
                 }
             }
+            merge_audio(&mut audios, extract_audio(&player));
         }
-        if tracks.iter().any(|t| !needs_pot(&t.base_url)) {
+        if tracks.iter().any(|t| !needs_pot(&t.base_url)) && best_audio(&audios).is_some() {
             break;
         }
     }
@@ -391,6 +426,16 @@ async fn player_bundle(
             "Could not read this video. It may be private, age-restricted, or removed.",
         ));
     };
+    if let Some(pick) = best_audio(&audios) {
+        cache_audio(AudioPick {
+            video_id: video_id.to_string(),
+            title: meta.title.clone(),
+            mime: pick.mime,
+            ext: pick.ext,
+            url: pick.url,
+            bitrate: pick.bitrate,
+        });
+    }
     Ok((meta, tracks, chapters))
 }
 
@@ -1351,6 +1396,151 @@ fn cache_put(key: String, doc: Arc<TranscriptDoc>) {
     g.push((key, Instant::now(), doc));
 }
 
+#[derive(Clone)]
+struct RawAudio {
+    mime: String,
+    ext: String,
+    url: String,
+    bitrate: u64,
+    itag: u64,
+}
+
+fn extract_audio(player: &Value) -> Vec<RawAudio> {
+    let mut out = Vec::new();
+    for key in ["/streamingData/adaptiveFormats", "/streamingData/formats"] {
+        let Some(arr) = player.pointer(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for item in arr {
+            if let Some(a) = raw_audio_from_item(item) {
+                out.push(a);
+            }
+        }
+    }
+    out
+}
+
+fn raw_audio_from_item(item: &Value) -> Option<RawAudio> {
+    let mime = item.get("mimeType").and_then(|v| v.as_str()).unwrap_or("");
+    if !mime.to_ascii_lowercase().starts_with("audio/") {
+        return None;
+    }
+    let url = item
+        .get("url")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())?;
+    let bitrate = item
+        .get("bitrate")
+        .and_then(|v| v.as_u64())
+        .or_else(|| item.get("averageBitrate").and_then(|v| v.as_u64()))
+        .unwrap_or(0);
+    let itag = item.get("itag").and_then(|v| v.as_u64()).unwrap_or(0);
+    Some(RawAudio {
+        ext: ext_from_mime(mime),
+        mime: mime.to_string(),
+        url: url.to_string(),
+        bitrate,
+        itag,
+    })
+}
+
+fn ext_from_mime(mime: &str) -> String {
+    let head = mime.split(';').next().unwrap_or(mime).trim().to_ascii_lowercase();
+    match head.as_str() {
+        "audio/mp4" | "audio/m4a" => "m4a".into(),
+        "audio/webm" => "webm".into(),
+        "audio/mpeg" => "mp3".into(),
+        "audio/ogg" | "audio/opus" => "ogg".into(),
+        _ => "m4a".into(),
+    }
+}
+
+fn audio_rank(a: &RawAudio) -> (u8, u64) {
+    let prefer = match a.ext.as_str() {
+        "m4a" => 3,
+        "mp3" => 2,
+        "webm" => 1,
+        _ => 0,
+    };
+    (prefer, a.bitrate)
+}
+
+fn merge_audio(into: &mut Vec<RawAudio>, extra: Vec<RawAudio>) {
+    for t in extra {
+        if let Some(existing) = into.iter_mut().find(|e| e.itag == t.itag && e.ext == t.ext) {
+            if audio_rank(&t) > audio_rank(existing) {
+                *existing = t;
+            }
+        } else {
+            into.push(t);
+        }
+    }
+}
+
+fn best_audio(audios: &[RawAudio]) -> Option<RawAudio> {
+    audios.iter().max_by_key(|a| audio_rank(a)).cloned()
+}
+
+fn cache_audio(pick: AudioPick) {
+    let mut g = AUDIO_CACHE.lock();
+    g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
+    g.retain(|(id, _, _)| id != &pick.video_id);
+    if g.len() >= CACHE_CAP {
+        g.remove(0);
+    }
+    g.push((pick.video_id.clone(), Instant::now(), pick));
+}
+
+fn audio_cache_get(video_id: &str) -> Option<AudioPick> {
+    let mut g = AUDIO_CACHE.lock();
+    g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
+    g.iter()
+        .find(|(k, _, _)| k == video_id)
+        .map(|(_, _, d)| d.clone())
+}
+
+pub async fn pick_audio(video_id: &str) -> Result<AudioPick, FetchError> {
+    if !is_id(video_id) {
+        return Err(FetchError::new(400, "That is not a YouTube video id."));
+    }
+    if let Some(hit) = audio_cache_get(video_id) {
+        return Ok(hit);
+    }
+    let _ = player_bundle(video_id).await?;
+    audio_cache_get(video_id).ok_or_else(|| {
+        FetchError::new(
+            404,
+            "YouTube did not expose a plain audio URL for this video (it may need a signature). Try another public video.",
+        )
+    })
+}
+
+pub async fn download_audio(
+    video_id: &str,
+) -> Result<(AudioPick, reqwest::Response), FetchError> {
+    let pick = pick_audio(video_id).await?;
+    let resp = HTTP_VR
+        .get(&pick.url)
+        .header("User-Agent", ANDROID_UA)
+        .header("Accept", "*/*")
+        .header("Origin", "https://www.youtube.com")
+        .header("Referer", "https://www.youtube.com/")
+        .send()
+        .await
+        .map_err(|e| FetchError::new(502, format!("Audio download failed ({e}).")))?;
+    let status = resp.status().as_u16();
+    if status == 403 || status == 404 {
+        return Err(FetchError::new(
+            status,
+            "YouTube refused the audio stream. It may have expired — refresh and try again.",
+        ));
+    }
+    if status >= 400 {
+        return Err(FetchError::new(status, "YouTube refused the audio stream."));
+    }
+    Ok((pick, resp))
+}
+
 /// Store a transcript fetched in the user's browser (extension / bookmarklet).
 pub fn ingest_client_doc(
     video_id: String,
@@ -1596,6 +1786,26 @@ mod tests {
             absolutize_caption_url("/api/timedtext?v=x"),
             "https://www.youtube.com/api/timedtext?v=x"
         );
+    }
+
+    #[test]
+    fn extract_audio_skips_video_and_cipher() {
+        let v: Value = serde_json::from_str(
+            r#"{
+              "streamingData": {
+                "adaptiveFormats": [
+                  {"itag": 137, "mimeType": "video/mp4", "url": "https://x/v"},
+                  {"itag": 140, "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"", "bitrate": 128000, "url": "https://x/a"},
+                  {"itag": 251, "mimeType": "audio/webm", "signatureCipher": "s=1&url=https://x/b"}
+                ]
+              }
+            }"#,
+        )
+        .unwrap();
+        let audios = extract_audio(&v);
+        assert_eq!(audios.len(), 1);
+        assert_eq!(audios[0].ext, "m4a");
+        assert_eq!(best_audio(&audios).unwrap().url, "https://x/a");
     }
 
     #[test]

@@ -1,12 +1,16 @@
-//! YouTubeToText — free YouTube transcripts in pure Rust (Resuma Flow).
+//! YouTubeForge — YouTube transcripts, audio, translation, summaries, and SRT.
 
 mod actions;
 mod ads;
 mod api;
+mod cross_sell;
 mod export;
+mod family;
+mod landing;
 mod langs;
 mod pages;
 mod parse;
+mod summary;
 mod tool;
 mod workspace;
 mod youtube;
@@ -37,12 +41,9 @@ fn chrome(body: View) -> View {
             <header class="site-header">
                 <div class="header-inner">
                     <NavLink href="/" class="brand" activeClass="is-active" exact=true>
-                        <span class="brand-mark" aria-hidden="true">"Tt"</span>
-                        <span class="brand-name">"YouTubeToText"</span>
+                        <span class="brand-mark" aria-hidden="true">"Yf"</span>
+                        <span class="brand-name">"YouTubeForge"</span>
                     </NavLink>
-                    <nav class="nav" data-r-nav-exclusive="">
-                        <NavLink href="/" class="nav-link" activeClass="is-active" exact=true>"Transcript"</NavLink>
-                    </nav>
                     <span class="nav-progress" aria-hidden="true"></span>
                 </div>
             </header>
@@ -52,8 +53,8 @@ fn chrome(body: View) -> View {
             </div>
             <footer class="site-footer">
                 <p>
-                    <strong>"YouTubeToText"</strong>
-                    " — free YouTube transcripts, no sign-up. Not affiliated with YouTube or Google."
+                    <strong>"YouTubeForge"</strong>
+                    " — YouTube transcripts, audio, translation, summaries, and SRT. Not affiliated with YouTube or Google."
                 </p>
             </footer>
             <div class="ad-rail ad-rail-end">
@@ -195,7 +196,7 @@ fn not_found() -> View {
     chrome(view! {
         <main class="content-section">
             <h1>"Page not found"</h1>
-            <p class="hero-lead">"That path does not exist on YouTubeToText."</p>
+            <p class="hero-lead">"That page does not exist on YouTubeForge."</p>
             {crate::ads::slot("notfound-mid", "infeed")}
             <p>
                 <NavLink href="/" class="btn btn-primary">"Back to home"</NavLink>
@@ -208,34 +209,34 @@ const HEAD: &str = r##"
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
-<meta property="og:title" content="YouTube Transcript — Free YouTube to Text, SRT & VTT | YouTubeToText" />
-<meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT/VTT/Markdown, translate. No cookie wall, no account." />
+<meta property="og:title" content="YouTube transcript, audio, SRT and translation | YouTubeForge" />
+<meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT, translate, or save audio. No account." />
 <meta property="og:type" content="website" />
 "##;
 
 fn seo_kit() -> SeoKit {
-    let mut kit = SeoKit::new("YouTubeToText", "https://youtubetotext.fly.dev")
+    let mut kit = SeoKit::new("YouTubeForge", "https://youtubetotext.fly.dev")
         .with_locale("en_US")
         .with_keywords(
-            "YouTube transcript, YouTube to transcript, YouTube to text, download YouTube captions, \
-             YouTube SRT, YouTube VTT, free transcript, video transcript, caption translator",
+            "YouTube transcript, YouTube to text, download YouTube captions, \
+             YouTube SRT, YouTube VTT, YouTube to audio, free transcript, caption translator",
         )
         .with_llms_summary(
-            "YouTubeToText turns a YouTube URL into a searchable, downloadable transcript. \
-             Copy as text or Markdown, export SRT/VTT/JSON, translate captions, and trim \
-             sections. No account.",
+            "YouTubeForge turns a YouTube URL into a searchable, downloadable transcript. \
+             Copy as text or Markdown, export SRT/VTT/JSON, translate captions, download audio, \
+             and trim sections. No account.",
         )
         .with_default_json_ld()
         .push_json_ld(json!({
             "@context": "https://schema.org",
             "@type": "WebApplication",
-            "name": "YouTubeToText",
+            "name": "YouTubeForge",
             "alternateName": ["YouTube transcript", "YouTube to text"],
             "url": "https://youtubetotext.fly.dev",
             "applicationCategory": "UtilitiesApplication",
             "operatingSystem": "Web",
             "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-            "description": "Free YouTube transcript tool: search, download SRT/VTT/Markdown, translate captions. No cookie wall, no account."
+            "description": "Free YouTube transcript tool: search, download SRT/VTT, translate captions, save audio. No account."
         }))
         .push_json_ld(json!({
             "@context": "https://schema.org",
@@ -243,10 +244,10 @@ fn seo_kit() -> SeoKit {
             "mainEntity": [
                 {
                     "@type": "Question",
-                    "name": "Is YouTubeToText free to use?",
+                    "name": "Is YouTubeForge free to use?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "Yes. YouTubeToText is free. No account, no sign-up. Public YouTube captions are extracted as-is."
+                        "text": "Yes. No account, no sign-up. Public YouTube captions are extracted as-is."
                     }
                 },
                 {
@@ -270,13 +271,13 @@ fn seo_kit() -> SeoKit {
                     "name": "Is there a limit to the length of the video?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "If YouTube has captions for a public video, YouTubeToText can load them. There is no extra length cap on our side."
+                        "text": "If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."
                     }
                 }
             ]
         }));
     kit.theme_color = Some("#FF0000".into());
-    kit.author = "YouTubeToText".into();
+    kit.author = "YouTubeForge".into();
     kit.llms_sections = vec![(
         "How to use".into(),
         "Open / with a YouTube URL, or go to /v/{videoId}. Optional query: lang, tlang.".into(),
@@ -293,7 +294,7 @@ async fn main() -> std::io::Result<()> {
     let public = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("public");
 
     FlowApp::new()
-        .with_title("YouTube Transcript — Free YouTube to Text, SRT & VTT | YouTubeToText")
+        .with_title("YouTube transcript, audio, SRT and translation | YouTubeForge")
         .with_description(
             "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
         )
@@ -306,6 +307,7 @@ async fn main() -> std::io::Result<()> {
         .with_public_dir(public)
         .without_pwa()
         .route("/api/transcript", get(api::transcript).options(api::preflight))
+        .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/ingest", post(api::ingest).options(api::preflight))
         .not_found(not_found)
         .auto_pages(

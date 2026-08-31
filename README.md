@@ -1,6 +1,6 @@
-# YouTubeToText
+# YouTubeForge
 
-Free **YouTube transcript** tool — **100% Rust** with [Resuma](https://resuma-docs.fly.dev/).
+Free YouTube transcripts, audio, SRT, translation, and summaries. Built with [Resuma](https://resuma-docs.fly.dev/).
 
 A cleaner competitor to [YouTubeToTranscript](https://youtubetotranscript.com/): searchable lines, real SRT/VTT downloads, shareable URLs, translation, and a free HTTP API. No account, no cookie wall.
 
@@ -8,13 +8,21 @@ Live: [youtubetotext.fly.dev](https://youtubetotext.fly.dev)
 
 ## What it does
 
+YouTubeForge family (one app, several SEO URLs):
+
+| Landing | App |
+|---|---|
+| `/youtube-to-text` | Transcript |
+| `/youtube-to-audio` | Audio download (`GET /api/audio?v=`) |
+| `/youtube-translator` | Caption `tlang` |
+| `/youtube-summary` | Chapter recap + prompts |
+| `/youtube-to-srt` | SRT/VTT |
+
+Paste once on `/`. After the transcript: tabs for Audio, Translate, Summary, SRT (`/?v=…&mode=…`). Shareable pages stay at `/v/{id}`.
+
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
-- Read the YouTube transcript next to a privacy-friendly player (YouTube loads on play)
-- Search, trim intro/outro (chips or click two lines), copy plain / timed / Markdown
-- Edit caption typos before copy or download
-- Download **TXT, SRT, VTT, Markdown, JSON**
-- Switch caption tracks and auto-translate (YouTube `tlang`)
-- Chrome/Firefox extension when YouTube blocks server IPs
+- Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
+- Download audio when YouTube exposes a plain audio URL
 - `GET /api/transcript?v=…&fmt=json|txt|srt|vtt|md`
 
 ## Development

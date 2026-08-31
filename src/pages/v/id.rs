@@ -1,5 +1,7 @@
 use resuma::prelude::*;
 
+use crate::cross_sell::mode_tabs;
+use crate::family::Mode;
 use crate::workspace::workspace;
 
 pub fn page(req: FlowRequest) -> View {
@@ -19,8 +21,9 @@ pub fn page(req: FlowRequest) -> View {
             move |res| match res {
             Ok(doc) => view! {
                 <main class="workspace-main">
+                    {mode_tabs(Mode::Text, &vid)}
                     {crate::ads::slot("workspace-top", "infeed")}
-                    {workspace(doc, lang_ok, tlang_ok)}
+                    {workspace(doc, lang_ok, tlang_ok, "text".into())}
                 </main>
             },
             Err(e) => fail_view(e.message, retry, vid, lang_s, tlang_s),

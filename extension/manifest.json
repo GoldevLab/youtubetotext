@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "YouTubeToText",
+  "name": "YouTubeForge",
   "version": "0.1.0",
   "description": "Get a YouTube transcript: searchable, downloadable SRT/VTT.",
   "permissions": ["activeTab"],

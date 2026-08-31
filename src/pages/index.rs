@@ -1,104 +1,124 @@
 use resuma::prelude::*;
 
+use crate::cross_sell::mode_tabs;
+use crate::family::{app_href, Mode};
+use crate::parse::parse_video_id;
 use crate::tool::home_search;
+use crate::workspace::workspace;
 
-pub fn page(_req: FlowRequest) -> View {
+pub fn page(req: FlowRequest) -> View {
+    let mode = Mode::parse(req.query_param("mode").unwrap_or("text"));
+    let raw = req.query_param("v").unwrap_or("");
+    let video_id = parse_video_id(raw).unwrap_or_default();
+    if video_id.is_empty() {
+        return idle();
+    }
+    set_page_title(format!(
+        "{} | YouTubeForge",
+        mode.nav_label()
+    ));
+    set_page_description(
+        "Transcript loaded. Download audio, translate captions, summarize, or export SRT — same video.",
+    );
+    transcript_workspace(req, video_id, mode)
+}
+
+fn idle() -> View {
+    set_page_title("YouTube transcript, audio, SRT and translation | YouTubeForge");
+    set_page_description(
+        "Paste a YouTube link. Get a searchable transcript, then download audio, translate captions, summarize, or export SRT. Free, no account.",
+    );
     view! {
         <main class="home-page">
             <section class="hero">
                 <div class="hero-copy">
-                    <p class="eyebrow">"YouTube transcript, instantly"</p>
-                    <h1>"Free YouTube transcript from any video"</h1>
+                    <p class="eyebrow">"Free YouTube transcript"</p>
+                    <h1>"Get the text from a YouTube video"</h1>
                     <p class="hero-lead">
-                        "Paste a YouTube link. Get the transcript: searchable, downloadable as SRT/VTT/Markdown, translatable, shareable. No cookie wall, no account — a cleaner YouTube to text tool."
+                        "Paste a public link. Search the captions, copy them, or download SRT. From the same result you can save the audio, translate, or get a short recap — without pasting again."
                     </p>
-                    {home_search()}
+                    {home_search(Mode::Text)}
                 </div>
             </section>
-
             {crate::ads::slot("home-hero", "infeed")}
-
             <section class="howto" aria-labelledby="howto-title">
-                <h2 id="howto-title">"How to get a YouTube transcript"</h2>
+                <h2 id="howto-title">"How it works"</h2>
                 <ol class="howto-grid">
                     <li>
                         <h3>"Paste the link"</h3>
-                        <p>"Watch, Shorts, youtu.be, or a bare video id. You land on a shareable page at " <code>"/v/{id}"</code> "."</p>
+                        <p>"A watch URL, Shorts, youtu.be, or the video id. No account."</p>
                     </li>
                     <li>
-                        <h3>"Trim and pick language"</h3>
-                        <p>"Skip intros and outros, click two lines to set a range, or switch captions. The language you pick stays in the URL."</p>
+                        <h3>"Read and export"</h3>
+                        <p>"Search lines, skip intros, copy the text, or download TXT, SRT, VTT, or Markdown."</p>
                     </li>
                     <li>
-                        <h3>"Copy, download, or prompt"</h3>
-                        <p>"Fix typos in Edit, download SRT/VTT/Markdown, or copy a summary, notes, quiz, or quotes prompt."</p>
+                        <h3>"Stay on this video"</h3>
+                        <p>"Audio, translation, a recap, and SRT are on the same result."</p>
                     </li>
                 </ol>
             </section>
-
-            {crate::ads::slot("home-mid", "infeed")}
-
-            <section class="features" aria-labelledby="why-title">
-                <h2 id="why-title">"Why YouTubeToText instead of the usual transcript sites"</h2>
-                <ul class="feature-grid">
-                    <li>
-                        <h3>"Shareable pages"</h3>
-                        <p>"Every YouTube transcript has a clean URL. Search engines and notes apps can read the text."</p>
-                    </li>
-                    <li>
-                        <h3>"Real downloads"</h3>
-                        <p>"TXT, SRT, VTT, Markdown with timestamp links, and JSON. One click — not copy-paste into a doc."</p>
-                    </li>
-                    <li>
-                        <h3>"Find the line"</h3>
-                        <p>"Filter as you type. Trim intros and outros. Click a line to jump the video. Press / to search."</p>
-                    </li>
-                    <li>
-                        <h3>"Translate without a round trip"</h3>
-                        <p>"Use YouTube’s own caption tracks and auto-translate. The language you pick is in the URL, so you can share it."</p>
-                    </li>
-                    <li>
-                        <h3>"AI prompts, not a paywall"</h3>
-                        <p>"Copy a ready-made summary, notes, quiz, or quotes prompt with the transcript. Paste it into the model you already use."</p>
-                    </li>
-                    <li>
-                        <h3>"No install"</h3>
-                        <p>"Paste a link in the browser. Search, copy, download, and share the transcript from one page."</p>
-                    </li>
-                </ul>
-            </section>
-
             {crate::ads::slot("home-faq", "infeed")}
+        </main>
+    }
+}
 
-            <section class="faq" aria-labelledby="faq-title">
-                <h2 id="faq-title">"FAQ"</h2>
-                <div class="faq-list">
-                    <details>
-                        <summary>"Is YouTubeToText free to use?"</summary>
-                        <p>"Yes. No account, no sign-up. If YouTube published captions for a public video, you can read them here."</p>
-                    </details>
-                    <details>
-                        <summary>"How do I access the transcript after generating it?"</summary>
-                        <p>"Every transcript lives at a clean URL: " <code>"/v/{videoId}"</code> ". Optional query params: " <code>"lang"</code> " and " <code>"tlang"</code> ". Bookmark it, share it, or paste it into notes — the text is in the page, not trapped in a widget."</p>
-                    </details>
-                    <details>
-                        <summary>"Can I download the transcript?"</summary>
-                        <p>"Yes. TXT, SRT, VTT, Markdown with timestamp links, and JSON. Copy and Copy Markdown are one click. Edits you make in Edit mode go into those files."</p>
-                    </details>
-                    <details>
-                        <summary>"Is there a limit to the length of the video?"</summary>
-                        <p>"If the video is public and has captions, we load them. We do not add an extra duration cap."</p>
-                    </details>
-                    <details>
-                        <summary>"How long does it take to generate the transcript?"</summary>
-                        <p>"Usually about a second. We read YouTube’s existing captions — we do not re-transcribe the audio."</p>
-                    </details>
-                    <details>
-                        <summary>"Is there a limit to the number of transcripts I can generate?"</summary>
-                        <p>"No account means no quota UI. Use it reasonably."</p>
-                    </details>
-                </div>
-            </section>
+fn transcript_workspace(req: FlowRequest, video_id: String, mode: Mode) -> View {
+    let lang = req.query_param("lang").unwrap_or("").to_string();
+    let tlang = req.query_param("tlang").unwrap_or("").to_string();
+    let retry = app_href(&video_id, mode);
+    let mode_s = mode.slug().to_string();
+    load_boundary(
+        crate::actions::use_video_doc_load(),
+        {
+            let retry = retry.clone();
+            let vid = video_id.clone();
+            let lang_ok = lang.clone();
+            let tlang_ok = tlang.clone();
+            let mode_ok = mode_s.clone();
+            move |res| match res {
+                Ok(doc) => view! {
+                    <main class="workspace-main">
+                        {mode_tabs(mode, &vid)}
+                        {crate::ads::slot("workspace-top", "infeed")}
+                        {workspace(doc, lang_ok, tlang_ok, mode_ok)}
+                    </main>
+                },
+                Err(e) => fail_view(e.message, retry, vid),
+            }
+        },
+        {
+            let retry = retry.clone();
+            let vid = video_id.clone();
+            move |err| fail_view(err.message, retry, vid)
+        },
+        || pending(),
+    )
+}
+
+fn pending() -> View {
+    view! {
+        <main class="content-section page-pending">
+            <p class="eyebrow">"Working"</p>
+            <h1>"Talking to YouTube…"</h1>
+            <p class="hero-lead">"This usually takes a second."</p>
+            {crate::ads::slot("workspace-loading", "infeed")}
+        </main>
+    }
+}
+
+fn fail_view(message: String, retry: String, vid: String) -> View {
+    let audio = format!("/api/audio?v={vid}");
+    view! {
+        <main class="content-section">
+            <h1>"Could not load that transcript"</h1>
+            <p class="hero-lead">{message}</p>
+            {crate::ads::slot("error-mid", "infeed")}
+            <p class="error-actions">
+                <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
+                <NavLink href="/" class="btn btn-ghost">"Another link"</NavLink>
+                <a class="btn btn-ghost" href={audio}>"Download audio anyway"</a>
+            </p>
         </main>
     }
 }

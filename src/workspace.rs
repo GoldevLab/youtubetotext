@@ -4,6 +4,8 @@ use resuma::prelude::*;
 use serde::Serialize;
 
 use crate::export::{format_clock, reading_minutes};
+use crate::family::Mode;
+use crate::summary::extractive_summary;
 use crate::youtube::{track_key, Cue, TranscriptDoc};
 
 #[derive(Serialize)]
@@ -22,7 +24,7 @@ struct ClientDoc {
 }
 
 #[island]
-pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
+pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) -> View {
     let video_id = doc.video_id.clone();
     let title = doc.title.clone();
     let author = doc.author.clone();
@@ -100,6 +102,16 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     } else {
         format!("{cue_count} lines · {words} words · ~{read_mins} min read · {duration}")
     };
+    let parsed_mode = Mode::parse(&mode);
+    let audio_href = format!("/api/audio?v={video_id}");
+    let recap = if parsed_mode == Mode::Summary {
+        extractive_summary(&doc)
+    } else {
+        String::new()
+    };
+    let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
+    let share = format!("/v/{video_id}");
+    let mode_slug = parsed_mode.slug().to_string();
 
     visible_task!(
         r##"
@@ -611,7 +623,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
             return;
         }
         if (err) err.hidden = true;
-        go("/v/" + encodeURIComponent(id));
+        go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(root.dataset.mode || "text"));
     });
     document.addEventListener("keydown", (e) => {
         const tag = document.activeElement?.tagName;
@@ -629,7 +641,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
     );
 
     view! {
-        <div id="ytt-ws" class="workspace" data-vid={video_id.clone()} data-lang={lang} data-duration={duration_attr}>
+        <div id="ytt-ws" class={ws_class} data-vid={video_id.clone()} data-lang={lang} data-duration={duration_attr} data-mode={mode_slug}>
             {View::raw(format!(
                 r#"<script type="application/json" id="ytt-data">{json}</script>"#
             ))}
@@ -652,6 +664,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                     <p class="vid-stats">{stats}</p>
                     <p>
                         <a class="btn btn-ghost" href={watch} target="_blank" rel="noreferrer noopener">"Open on YouTube"</a>
+                        <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
+                    </p>
+                    <p>
+                        <a class="btn btn-primary" href={audio_href}>"Download audio"</a>
                     </p>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
@@ -750,8 +766,20 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String) -> View {
                         <button type="button" class="btn btn-ghost" data-prompt="quotes">"Quotes"</button>
                     </div>
                 </fieldset>
+                {if recap.is_empty() {
+                    view! { <span class="recap-skip" hidden=""></span> }
+                } else {
+                    view! {
+                        <section class="recap">
+                            <h2>"Chapter recap from captions"</h2>
+                            <p class="hint">"Extractive sentences from this transcript — not a third-party model."</p>
+                            <pre class="recap-body">{recap}</pre>
+                        </section>
+                    }
+                }}
                 {crate::ads::slot("workspace-cues", "infeed")}
                 {View::raw(cues_html)}
+                {crate::cross_sell::related(parsed_mode, &video_id)}
             </section>
         </div>
     }

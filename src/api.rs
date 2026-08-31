@@ -1,14 +1,16 @@
 //! Public JSON/text transcript API.
 
+use axum::body::Body;
 use axum::extract::Query;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
+use futures_util::TryStreamExt;
 use serde::Deserialize;
 
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
 use crate::parse::parse_video_id;
-use crate::youtube::{ingest_client_doc, load_transcript, Cue};
+use crate::youtube::{download_audio, ingest_client_doc, load_transcript, Cue};
 
 #[derive(Debug, Deserialize)]
 pub struct ApiQuery {
@@ -96,6 +98,72 @@ pub async fn transcript(Query(q): Query<ApiQuery>) -> impl IntoResponse {
             "fmt must be json, txt, srt, vtt, md, or timed.",
         ),
     }
+}
+
+pub async fn audio(Query(q): Query<ApiQuery>) -> Response {
+    let raw = q
+        .v
+        .as_deref()
+        .or(q.url.as_deref())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let Some(id) = parse_video_id(&raw) else {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "Pass v=VIDEO_ID or a YouTube url=…",
+        )
+        .into_response();
+    };
+    match download_audio(&id).await {
+        Ok((pick, yt)) => {
+            let filename = safe_audio_name(&pick.title, &id, &pick.ext);
+            let mut builder = Response::builder().status(StatusCode::OK);
+            let mime = if pick.mime.is_empty() {
+                "application/octet-stream"
+            } else {
+                pick.mime
+                    .split(';')
+                    .next()
+                    .unwrap_or(pick.mime.as_str())
+                    .trim()
+            };
+            builder = builder.header(header::CONTENT_TYPE, mime);
+            builder = builder.header(
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{filename}\""),
+            );
+            builder = builder.header(header::CACHE_CONTROL, "private, max-age=120");
+            if let Some(len) = yt.content_length() {
+                builder = builder.header(header::CONTENT_LENGTH, len);
+            }
+            let stream = yt
+                .bytes_stream()
+                .map_err(|e| std::io::Error::other(e.to_string()));
+            builder.body(Body::from_stream(stream)).unwrap_or_else(|_| {
+                json_error(StatusCode::BAD_GATEWAY, "Could not stream audio.").into_response()
+            })
+        }
+        Err(e) => {
+            let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
+            json_error(status, &e.message).into_response()
+        }
+    }
+}
+
+fn safe_audio_name(title: &str, id: &str, ext: &str) -> String {
+    let mut stem: String = title
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    while stem.contains("--") {
+        stem = stem.replace("--", "-");
+    }
+    stem = stem.trim_matches('-').chars().take(72).collect();
+    if stem.is_empty() {
+        stem = id.to_string();
+    }
+    format!("{stem}.{ext}")
 }
 
 #[derive(Debug, Deserialize)]

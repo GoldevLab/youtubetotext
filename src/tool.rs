@@ -2,8 +2,12 @@
 
 use resuma::prelude::*;
 
+use crate::family::Mode;
+
 #[island]
-pub fn home_search() -> View {
+pub fn home_search(mode: Mode) -> View {
+    let cta = mode.cta().to_string();
+    let slug = mode.slug().to_string();
     visible_task!(
         r##"
 (async (state, __resuma) => {
@@ -14,6 +18,7 @@ pub fn home_search() -> View {
     const input = root.querySelector('input[name="url"]');
     const err = root.querySelector("[data-form-error]");
     const recents = root.querySelector("[data-recents]");
+    const mode = root.dataset.mode || "text";
     const KEY = "youtubetotext-recent";
     const parseId = (raw) => {
         const s = String(raw || "").trim();
@@ -60,7 +65,7 @@ pub fn home_search() -> View {
         for (const x of items) {
             const li = document.createElement("li");
             const a = document.createElement("a");
-            a.href = "/v/" + encodeURIComponent(x.id);
+            a.href = "/?v=" + encodeURIComponent(x.id) + "&mode=" + encodeURIComponent(mode);
             a.textContent = x.title || x.id;
             a.setAttribute("data-r-nav", "true");
             li.appendChild(a);
@@ -97,15 +102,16 @@ pub fn home_search() -> View {
         input?.removeAttribute("aria-invalid");
         form?.classList.add("is-busy");
         saveRecent(id, id);
-        go("/v/" + encodeURIComponent(id));
+        go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(mode));
     });
 })
 "##
     );
 
     view! {
-        <div id="ytt-home">
+        <div id="ytt-home" data-mode={slug.clone()}>
             <Form submit={crate::actions::open_transcript} class="hero-form">
+                <input type="hidden" name="mode" value={slug} />
                 <label class="hero-label">
                     "YouTube link"
                     <span class="hero-field">
@@ -121,7 +127,7 @@ pub fn home_search() -> View {
                             aria-describedby="url-help url-error"
                         />
                         <button type="button" class="btn btn-ghost" data-paste="" hidden="">"Paste"</button>
-                        <button type="submit" class="btn btn-primary">"Get transcript"</button>
+                        <button type="submit" class="btn btn-primary">{cta}</button>
                     </span>
                 </label>
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>
