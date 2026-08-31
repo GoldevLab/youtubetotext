@@ -18,7 +18,7 @@ YouTubeForge family (one app, several SEO URLs):
 | `/youtube-summary` | Chapter recap + prompts |
 | `/youtube-to-srt` | SRT/VTT |
 
-Paste once on `/`. After the transcript: tabs for Audio, Translate, Summary, SRT (`/?v=…&mode=…`). Shareable pages stay at `/v/{id}`.
+Paste once on `/`. Tools for the same video (audio, translate, summary, SRT) sit in the transcript column. Shareable pages stay at `/v/{id}`.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**

@@ -108,7 +108,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
     let share = format!("/v/{video_id}");
     let mode_slug = parsed_mode.slug().to_string();
-    let tabs = crate::cross_sell::mode_tabs(parsed_mode, &video_id);
 
     visible_task!(
         r##"
@@ -817,7 +816,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             {View::raw(format!(
                 r#"<script type="application/json" id="ytt-data">{json}</script>"#
             ))}
-            {tabs}
             <aside class="player-col">
                 <div class="player-card">
                     <div class="player-facade" data-player="">

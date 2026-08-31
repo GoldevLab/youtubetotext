@@ -523,7 +523,6 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "tabs"
     "player"
     "transcript";
   gap: 1.15rem;
@@ -533,10 +532,6 @@ select:focus-visible {
 
 .workspace > script {
   display: none;
-}
-
-.mode-tabs {
-  grid-area: tabs;
 }
 
 .player-col {
@@ -965,7 +960,6 @@ select:focus-visible {
   .workspace {
     grid-template-columns: minmax(18rem, 0.95fr) minmax(24rem, 1.35fr);
     grid-template-areas:
-      "tabs tabs"
       "player transcript";
   }
 
@@ -983,7 +977,6 @@ select:focus-visible {
   .workspace {
     grid-template-columns: minmax(18rem, 0.95fr) minmax(24rem, 1.35fr);
     grid-template-areas:
-      "tabs tabs"
       "player transcript";
   }
 
