@@ -1495,6 +1495,21 @@ select:focus-visible {
   min-height: 90px;
 }
 
+.ad-slot.is-live .ad-slot-frame {
+  border-style: solid;
+  background: color-mix(in srgb, var(--bg-soft) 70%, transparent);
+}
+
+.ad-slot.is-live .ad-slot-label {
+  display: none;
+}
+
+.ad-slot ins.adsbygoogle {
+  display: block;
+  width: 100%;
+  min-height: inherit;
+}
+
 .ad-rail {
   width: 100%;
   max-width: var(--max);

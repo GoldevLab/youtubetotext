@@ -27,6 +27,25 @@ Paste once on `/`. Tools for the same video (audio, translate, summary, SRT) sit
 
 The public API and video loads are rate-limited per IP so scrapers cannot drain YouTube captions through this app. Optional Cloudflare Turnstile: set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` on Fly.
 
+## Google AdSense
+
+Slots stay reserved (leaderboard / infeed / rectangle). Placeholders until you set a publisher ID and unit IDs.
+
+```bash
+# local
+ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
+ADSENSE_SLOT_LEADERBOARD=1234567890
+ADSENSE_SLOT_INFEED=1234567891
+ADSENSE_SLOT_RECTANGLE=1234567892
+
+# optional per placement, e.g. home-hero → ADSENSE_SLOT_HOME_HERO
+# fly
+fly secrets set ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx \
+  ADSENSE_SLOT_LEADERBOARD=… ADSENSE_SLOT_INFEED=… ADSENSE_SLOT_RECTANGLE=…
+```
+
+With `ADSENSE_CLIENT` set, the app serves `/ads.txt` and loads `adsbygoogle.js`. Create matching display units in AdSense (responsive). Rectangle units fill when the download dialog opens.
+
 ## Development
 
 ```bash

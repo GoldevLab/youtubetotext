@@ -213,6 +213,7 @@ const HEAD: &str = r##"
 <meta property="og:title" content="YouTube transcript, audio, SRT and translation | YouTubeForge" />
 <meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT, translate, or save audio. No account." />
 <meta property="og:type" content="website" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -290,12 +291,18 @@ fn seo_kit() -> SeoKit {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let kit = seo_kit();
-    let head = format!("{HEAD}{}", kit.head_extras());
+    let head = format!("{HEAD}{}{}", kit.head_extras(), ads::head_snippet());
     let json_ld = serde_json::to_string(&kit.json_ld_blocks).unwrap_or_else(|_| "[]".into());
     let llms: &'static [u8] = Box::leak(kit.llms_txt().into_bytes().into_boxed_slice());
+    let ads_txt = ads::ads_txt().map(|s| -> &'static [u8] {
+        Box::leak(s.into_bytes().into_boxed_slice())
+    });
     let public = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("public");
 
-    FlowApp::new()
+    let mut serve = FlowServeOptions::default();
+    ads::apply_csp(&mut serve.security.csp);
+
+    let mut app = FlowApp::new()
         .with_title("YouTube transcript, audio, SRT and translation | YouTubeForge")
         .with_description(
             "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
@@ -305,9 +312,34 @@ async fn main() -> std::io::Result<()> {
         .with_json_ld(json_ld)
         .with_head(head)
         .with_stylesheet("/css/youtubetotext.css")
-        .static_asset("/llms.txt", llms, "text/plain; charset=utf-8")
-        .with_public_dir(public)
-        .without_pwa()
+        .static_asset("/llms.txt", llms, "text/plain; charset=utf-8");
+    if let Some(body) = ads_txt {
+        app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
+    }
+    app.with_public_dir(public)
+        .with_pwa(FlowPwaConfig {
+            name: "YouTubeForge".into(),
+            short_name: "Yf".into(),
+            description: "YouTube transcripts, audio, SRT, translation, and summaries.".into(),
+            theme_color: "#FF0000".into(),
+            background_color: "#0f0f0f".into(),
+            start_url: "/".into(),
+            scope: "/".into(),
+            cache_version: "yf-1".into(),
+            display: "standalone".into(),
+            orientation: "any".into(),
+            lang: "en".into(),
+            icon_char: Some("Y".into()),
+            precache_paths: vec!["/css/youtubetotext.css".into()],
+            shortcuts: vec![PwaShortcut {
+                name: "New transcript".into(),
+                short_name: "Home".into(),
+                url: "/".into(),
+            }],
+            offline_title: "You're offline".into(),
+            offline_message: "YouTubeForge needs a connection to fetch captions and downloads. Reconnect and try again.".into(),
+            manifest_icons: Vec::new(),
+        })
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))
@@ -319,6 +351,6 @@ async fn main() -> std::io::Result<()> {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages"),
             PagesRegistry,
         )
-        .serve(FlowServeOptions::default())
+        .serve(serve)
         .await
 }

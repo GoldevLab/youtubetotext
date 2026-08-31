@@ -134,6 +134,7 @@ pub fn home_search(mode: Mode) -> View {
                 ? "The file will save to your downloads folder. MP3 conversion can take a moment."
                 : "The file will save to your downloads folder. Higher qualities can take a minute.";
             if (typeof dlg.showModal === "function") dlg.showModal();
+            try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
         }
         const a = document.createElement("a");
         a.href = href;
