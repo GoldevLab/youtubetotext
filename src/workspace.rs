@@ -350,6 +350,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         ws.querySelectorAll(".mode-tab").forEach((el) => {
             el.classList.toggle("is-active", el.getAttribute("data-mode-tab") === mode);
         });
+        const modeInp = ws.querySelector('.toolbar-lang input[name="mode"]');
+        if (modeInp) modeInp.value = mode;
         const u = new URL(location.href);
         if (u.pathname === "/" || u.pathname === "") {
             u.searchParams.set("v", ws.dataset.vid || "");
@@ -359,17 +361,91 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
     const langHref = (ws) => {
         const form = ws.querySelector(".toolbar-lang");
-        const u = new URL(location.href);
         const fd = form ? new FormData(form) : new FormData();
-        const lang = String(fd.get("lang") || "");
-        const tlang = String(fd.get("tlang") || "");
+        const lang = String(fd.get("lang") || "").trim();
+        const tlang = String(fd.get("tlang") || "").trim();
+        const vid = ws.dataset.vid || String(fd.get("v") || "");
+        const mode = ws.dataset.mode || String(fd.get("mode") || "text") || "text";
+        const u = new URL(location.href);
         if (u.pathname === "/" || u.pathname === "") {
-            u.searchParams.set("v", ws.dataset.vid || "");
-            u.searchParams.set("mode", ws.dataset.mode || "translate");
+            u.pathname = "/";
+            u.search = "";
+            u.searchParams.set("v", vid);
+            u.searchParams.set("mode", mode);
+        } else {
+            u.searchParams.delete("v");
         }
         if (lang) u.searchParams.set("lang", lang); else u.searchParams.delete("lang");
         if (tlang) u.searchParams.set("tlang", tlang); else u.searchParams.delete("tlang");
+        u.searchParams.delete("_r");
         return u.pathname + u.search;
+    };
+    const applyLang = async (ws) => {
+        const modeInp = ws.querySelector('.toolbar-lang input[name="mode"]');
+        if (modeInp) modeInp.value = ws.dataset.mode || modeInp.value || "text";
+        const form = ws.querySelector(".toolbar-lang");
+        const fd = form ? new FormData(form) : new FormData();
+        const lang = String(fd.get("lang") || "").trim();
+        const tlang = String(fd.get("tlang") || "").trim();
+        const vid = ws.dataset.vid || String(fd.get("v") || "");
+        if (!vid) return;
+        const href = langHref(ws);
+        const qs = new URLSearchParams({ v: vid, fmt: "json" });
+        if (lang) qs.set("lang", lang);
+        if (tlang) qs.set("tlang", tlang);
+        const applyBtn = ws.querySelector("[data-apply]");
+        if (applyBtn) applyBtn.disabled = true;
+        setStatus(ws, tlang ? "Translating captions…" : "Loading captions…");
+        try {
+            const res = await fetch("/api/transcript?" + qs.toString(), {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error || !Array.isArray(data.cues)) {
+                setStatus(ws, data.error || "Could not load that language. Try Apply again in a minute.");
+                return;
+            }
+            const payload = {
+                video_id: data.video_id || vid,
+                title: data.title || "",
+                author: data.author || "",
+                cues: data.cues,
+            };
+            const el = ws.querySelector("#ytt-data");
+            if (el) el.textContent = JSON.stringify(payload);
+            const list = ws.querySelector("[data-cues]");
+            if (list) {
+                const frag = document.createDocumentFragment();
+                for (const c of data.cues) {
+                    const div = document.createElement("div");
+                    div.className = "cue";
+                    div.dataset.ms = String(c.start_ms ?? 0);
+                    div.dataset.text = c.text || "";
+                    div.setAttribute("role", "button");
+                    div.tabIndex = 0;
+                    const time = document.createElement("time");
+                    time.textContent = fmtClock(Number(c.start_ms || 0));
+                    const span = document.createElement("span");
+                    span.setAttribute("data-cue-text", "");
+                    span.textContent = c.text || "";
+                    div.append(time, span);
+                    frag.append(div);
+                }
+                list.replaceChildren(frag);
+            }
+            const trackName = data.track && data.track.name;
+            const metaBits = ws.querySelectorAll(".vid-meta span");
+            if (trackName && metaBits.length >= 3) metaBits[2].textContent = trackName;
+            history.replaceState({}, "", href);
+            paintMode(ws, tlang ? "translate" : (ws.dataset.mode || "text"));
+            applyFilters(ws);
+            setStatus(ws, tlang ? "Translated captions are on the page." : "Captions updated.");
+        } catch (_) {
+            setStatus(ws, "Could not load that language.");
+        } finally {
+            if (applyBtn) applyBtn.disabled = false;
+        }
     };
     const root = liveWorkspace();
     if (root) {
@@ -385,7 +461,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     const applyStoredEdits = (ws) => {
         const dataNow = wsData(ws);
         const edits = (() => {
-            try { return JSON.parse(localStorage.getItem("youtubetotext-edits-" + (dataNow.video_id || ws.dataset.vid || "")) || "{}"); } catch { return {}; }
+            try { return JSON.parse(localStorage.getItem("youtubetotext-edits-" + (dataNow.video_id || ws.dataset.vid || "") + "-" + (location.search || "")) || "{}"); } catch { return {}; }
         })();
         dataNow.cues.forEach((c) => {
             const next = edits[c.start_ms] ?? edits[String(c.start_ms)];
@@ -537,6 +613,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 return;
             }
             if (!ws) return;
+            if (t.closest("[data-apply]")) {
+                e.preventDefault();
+                applyLang(ws);
+                return;
+            }
             if (t.closest("[data-play]")) {
                 e.preventDefault();
                 mountPlayer(ws, 0);
@@ -663,7 +744,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (!ws) return;
             if (form.classList.contains("toolbar-lang")) {
                 e.preventDefault();
-                go(langHref(ws));
+                applyLang(ws);
                 return;
             }
             if (form.hasAttribute("data-another")) {
@@ -685,7 +766,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (!(t instanceof Element)) return;
             const ws = t.closest("#ytt-ws");
             if (!ws) return;
-            if (t.matches("[data-lang-select], [data-tlang-select]")) go(langHref(ws));
+            if (t.matches("[data-lang-select], [data-tlang-select]")) applyLang(ws);
         });
         document.addEventListener("input", (e) => {
             const t = e.target;
@@ -706,7 +787,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (el) el.textContent = JSON.stringify(dataNow);
             const map = {};
             for (const c of dataNow.cues) map[c.start_ms] = c.text;
-            try { localStorage.setItem("youtubetotext-edits-" + (ws.dataset.vid || ""), JSON.stringify(map)); } catch (_) {}
+            try { localStorage.setItem("youtubetotext-edits-" + (ws.dataset.vid || "") + "-" + (location.search || ""), JSON.stringify(map)); } catch (_) {}
         });
         document.addEventListener("keydown", (e) => {
             const ws = liveWorkspace();
@@ -784,7 +865,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 </div>
             </aside>
             <section class="transcript-col">
-                <form class="toolbar toolbar-lang" method="get" action={action}>
+                <form class="toolbar toolbar-lang" method="get" action={action} data-lang-form="">
                     <input type="hidden" name="v" value={video_id.clone()} />
                     <input type="hidden" name="mode" value={mode_slug.clone()} />
                     <label>
@@ -795,7 +876,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         "Translate"
                         <select name="tlang" data-tlang-select="">{tlang_options}</select>
                     </label>
-                    <button type="submit" class="btn btn-secondary" data-apply="">"Apply"</button>
+                    <button type="submit" class="btn btn-primary" data-apply="">"Apply"</button>
                 </form>
                 <div class="toolbar">
                     <label class="grow">

@@ -168,9 +168,19 @@ struct RemoteTrack {
 
 pub fn track_key(lang: &str, kind: &str) -> String {
     if kind == "asr" {
-        format!("{lang}|asr")
+        format!("{lang}:asr")
     } else {
         lang.to_string()
+    }
+}
+
+/// `es:asr` (form values) or legacy `es|asr` query strings.
+fn split_lang_want(w: &str) -> (&str, bool) {
+    let w = w.trim();
+    if let Some(code) = w.strip_suffix("|asr").or_else(|| w.strip_suffix(":asr")) {
+        (code, true)
+    } else {
+        (w, false)
     }
 }
 
@@ -247,12 +257,10 @@ async fn fetch_uncached(
 
     if cues.is_empty() {
         let lang_code = lang
-            .unwrap_or(chosen.lang.as_str())
-            .split('|')
-            .next()
-            .unwrap_or(chosen.lang.as_str())
-            .to_string();
-        let asr = chosen.kind == "asr" || lang.is_some_and(|s| s.ends_with("|asr"));
+            .map(split_lang_want)
+            .map(|(code, _)| code.to_string())
+            .unwrap_or_else(|| chosen.lang.clone());
+        let asr = chosen.kind == "asr" || lang.is_some_and(|s| split_lang_want(s).1);
         if let Ok(from_panel) = innertube_transcript(video_id, &lang_code, asr).await {
             if !from_panel.is_empty() {
                 cues = from_panel;
@@ -710,8 +718,7 @@ fn tracks_for_fetch<'a>(tracks: &'a [RemoteTrack], lang: Option<&str>) -> Vec<&'
 fn track_lang_rank(t: &RemoteTrack, lang: Option<&str>) -> u8 {
     let wanted = lang.map(|s| s.trim()).filter(|s| !s.is_empty());
     if let Some(w) = wanted {
-        let asr = w.ends_with("|asr");
-        let code = w.strip_suffix("|asr").unwrap_or(w);
+        let (code, asr) = split_lang_want(w);
         let lang_hit = t.lang.eq_ignore_ascii_case(code)
             || t.lang
                 .split(['-', '_'])
@@ -780,8 +787,7 @@ fn json_text(v: Option<&Value>) -> Option<String> {
 fn pick_track<'a>(tracks: &'a [RemoteTrack], lang: Option<&str>) -> Option<&'a RemoteTrack> {
     let wanted = lang.map(|s| s.trim()).filter(|s| !s.is_empty());
     if let Some(w) = wanted {
-        let asr = w.ends_with("|asr");
-        let code = w.strip_suffix("|asr").unwrap_or(w);
+        let (code, asr) = split_lang_want(w);
         if asr {
             return tracks
                 .iter()
@@ -1605,7 +1611,7 @@ pub fn ingest_client_doc(
         chapters: vec![],
     });
     let lang_key = if kind == "asr" && !lang.is_empty() {
-        format!("{lang}|asr")
+        format!("{lang}:asr")
     } else {
         lang
     };
@@ -1725,7 +1731,8 @@ mod tests {
         ];
         assert_eq!(pick_track(&tracks, Some("en")).unwrap().kind, "");
         assert_eq!(pick_track(&tracks, Some("en|asr")).unwrap().kind, "asr");
-        assert_eq!(track_key("en", "asr"), "en|asr");
+        assert_eq!(pick_track(&tracks, Some("en:asr")).unwrap().kind, "asr");
+        assert_eq!(track_key("en", "asr"), "en:asr");
     }
 
     #[test]
