@@ -2000,43 +2000,118 @@ async fn peek_audio_len(url: &str, ua: &str) -> Result<u64, FetchError> {
 
 async fn stream_ytdlp(
     video_id: &str,
-    pick: AudioPick,
+    mut pick: AudioPick,
+    format: &str,
+    extra: &[&str],
+    fail: &str,
 ) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
     let bin = ytdlp_path().ok_or_else(|| {
         FetchError::new(
             503,
-            "Audio download is not available on this server yet. Try again after the next deploy.",
+            "Media download is not available on this server yet. Try again after the next deploy.",
         )
     })?;
     let url = format!("https://www.youtube.com/watch?v={video_id}");
     let mut child = tokio::process::Command::new(bin)
         .args([
             "-f",
-            "bestaudio[ext=m4a]/bestaudio/best",
+            format,
             "-o",
             "-",
             "--no-progress",
             "--no-warnings",
             "--no-playlist",
-            "--",
-            &url,
         ])
+        .args(extra)
+        .args(["--", &url])
         .env("HOME", "/tmp")
         .env("XDG_CACHE_HOME", "/tmp")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| FetchError::new(502, format!("Could not start audio download ({e}).")))?;
-    let stdout = child.stdout.take().ok_or_else(|| {
-        FetchError::new(502, "Could not start audio download.")
-    })?;
+        .map_err(|e| FetchError::new(502, format!("{fail} ({e}).")))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| FetchError::new(502, fail.to_string()))?;
     tokio::spawn(async move {
         let _ = child.wait().await;
     });
     let stream = tokio_util::io::ReaderStream::new(stdout)
         .map(|item| item.map_err(|e| io::Error::other(e.to_string())));
+    if pick.ext.is_empty() {
+        pick.ext = "mp4".into();
+    }
     Ok((pick, 0, Box::pin(stream)))
+}
+
+fn ffmpeg_available() -> bool {
+    env::var("FFMPEG")
+        .ok()
+        .map(|p| Path::new(&p).is_file())
+        .unwrap_or(false)
+        || Path::new("/usr/bin/ffmpeg").is_file()
+}
+
+pub fn normalize_video_quality(raw: Option<&str>) -> &'static str {
+    match raw.unwrap_or("720").trim().to_ascii_lowercase().as_str() {
+        "360" | "360p" => "360",
+        "480" | "480p" => "480",
+        "1080" | "1080p" => "1080",
+        "best" | "max" => "best",
+        _ => "720",
+    }
+}
+
+fn video_ytdlp_format(quality: &str, ffmpeg: bool) -> String {
+    let height = match quality {
+        "360" => Some(360u32),
+        "480" => Some(480),
+        "1080" => Some(1080),
+        "best" => None,
+        _ => Some(720),
+    };
+    match (ffmpeg, height) {
+        (true, None) => "bv*+ba/b".into(),
+        (true, Some(h)) => format!("b[height<={h}][ext=mp4]/bv*[height<={h}]+ba/b[height<={h}]/b"),
+        (false, None) => "best[ext=mp4]/best".into(),
+        (false, Some(h)) => {
+            format!("best[height<={h}][ext=mp4]/best[height<={h}]/best")
+        }
+    }
+}
+
+pub async fn download_video(
+    video_id: &str,
+    quality: &str,
+) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
+    if !is_id(video_id) {
+        return Err(FetchError::new(400, "That is not a YouTube video id."));
+    }
+    let q = normalize_video_quality(Some(quality));
+    let ffmpeg = ffmpeg_available();
+    let spec = video_ytdlp_format(q, ffmpeg);
+    let extra: Vec<&str> = if ffmpeg {
+        vec!["--merge-output-format", "mp4"]
+    } else {
+        Vec::new()
+    };
+    let mut meta = load_audio_picks(video_id)
+        .await
+        .ok()
+        .and_then(|p| p.into_iter().next())
+        .unwrap_or_else(|| placeholder_pick(video_id));
+    meta.ext = "mp4".into();
+    meta.mime = "video/mp4".into();
+    stream_ytdlp(
+        video_id,
+        meta,
+        &spec,
+        &extra,
+        "Could not start video download",
+    )
+    .await
 }
 
 pub async fn download_audio(
@@ -2056,8 +2131,18 @@ pub async fn download_audio(
             _ => {}
         }
     }
-    let meta = picks.into_iter().next().unwrap_or_else(|| placeholder_pick(video_id));
-    stream_ytdlp(video_id, meta).await
+    let meta = picks
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| placeholder_pick(video_id));
+    stream_ytdlp(
+        video_id,
+        meta,
+        "bestaudio[ext=m4a]/bestaudio/best",
+        &[],
+        "Could not start audio download",
+    )
+    .await
 }
 
 /// Store a transcript fetched in the user's browser (extension / bookmarklet).
@@ -2327,6 +2412,17 @@ mod tests {
         assert_eq!(audios[0].ext, "m4a");
         assert_eq!(audios[0].ua, "test-ua");
         assert_eq!(best_audio(&audios).unwrap().url, "https://x/a");
+    }
+
+    #[test]
+    fn video_quality_and_format_strings() {
+        assert_eq!(normalize_video_quality(None), "720");
+        assert_eq!(normalize_video_quality(Some("1080p")), "1080");
+        assert_eq!(normalize_video_quality(Some("best")), "best");
+        let muxed = video_ytdlp_format("720", false);
+        assert!(muxed.contains("height<=720"));
+        let dash = video_ytdlp_format("1080", true);
+        assert!(dash.contains("bv*"));
     }
 
     #[test]

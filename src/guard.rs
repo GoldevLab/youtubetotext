@@ -36,6 +36,10 @@ pub const AUDIO: Limit = Limit {
     bucket: "audio",
     max: 10,
 };
+pub const VIDEO: Limit = Limit {
+    bucket: "video",
+    max: 6,
+};
 pub const TRANSLATE: Limit = Limit {
     bucket: "translate",
     max: 20,

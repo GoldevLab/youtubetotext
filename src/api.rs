@@ -9,7 +9,10 @@ use serde::Deserialize;
 
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
 use crate::parse::parse_video_id;
-use crate::youtube::{download_audio, ingest_client_doc, load_transcript, translate_cue_texts, Cue};
+use crate::youtube::{
+    download_audio, download_video, ingest_client_doc, load_transcript, normalize_video_quality,
+    translate_cue_texts, Cue,
+};
 use crate::guard;
 
 #[derive(Debug, Deserialize)]
@@ -19,6 +22,7 @@ pub struct ApiQuery {
     pub lang: Option<String>,
     pub tlang: Option<String>,
     pub fmt: Option<String>,
+    pub q: Option<String>,
 }
 
 pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl IntoResponse {
@@ -147,6 +151,53 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
                 .body(Body::from_stream(stream))
                 .unwrap_or_else(|_| {
                     json_error(StatusCode::BAD_GATEWAY, "Could not stream audio.").into_response()
+                })
+        }
+        Err(e) => {
+            let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
+            json_error(status, &e.message).into_response()
+        }
+    }
+}
+
+pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
+    if let Err(m) = guard::check_headers(&headers, guard::VIDEO) {
+        return json_error(StatusCode::TOO_MANY_REQUESTS, &m).into_response();
+    }
+    let raw = q
+        .v
+        .as_deref()
+        .or(q.url.as_deref())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let Some(id) = parse_video_id(&raw) else {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "Pass v=VIDEO_ID or a YouTube url=…",
+        )
+        .into_response();
+    };
+    let quality = normalize_video_quality(q.q.as_deref());
+    match download_video(&id, quality).await {
+        Ok((pick, len, stream)) => {
+            let mut builder = Response::builder().status(StatusCode::OK);
+            builder = builder.header(header::CONTENT_TYPE, "video/mp4");
+            builder = builder.header(
+                header::CONTENT_DISPOSITION,
+                format!(
+                    "attachment; filename=\"{}\"",
+                    safe_audio_name(&format!("{}-{quality}", pick.title), &id, "mp4")
+                ),
+            );
+            builder = builder.header(header::CACHE_CONTROL, "private, max-age=60");
+            if len > 0 {
+                builder = builder.header(header::CONTENT_LENGTH, len);
+            }
+            builder
+                .body(Body::from_stream(stream))
+                .unwrap_or_else(|_| {
+                    json_error(StatusCode::BAD_GATEWAY, "Could not stream video.").into_response()
                 })
         }
         Err(e) => {

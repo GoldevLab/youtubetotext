@@ -483,6 +483,38 @@ select:focus-visible {
   background: var(--yt-red-hover);
 }
 
+.media-dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.7rem;
+  align-items: end;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.media-dl label {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.media-dl select {
+  font: inherit;
+  font-size: 1rem;
+  min-height: 2.6rem;
+  min-width: 8.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.player-col > .hint {
+  margin: 0.15rem 0 0.6rem;
+}
+
 .btn-secondary,
 .btn-ghost {
   background: var(--bg-soft);
@@ -1513,6 +1545,7 @@ select:focus-visible {
 
 .workspace.is-mode-srt [data-dl="srt"],
 .workspace.is-mode-audio [data-audio],
+.workspace.is-mode-audio [data-video],
 .workspace.is-mode-translate [data-tlang-select] {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }

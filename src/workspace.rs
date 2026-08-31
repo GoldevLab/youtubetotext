@@ -107,6 +107,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
     let parsed_mode = Mode::parse(&mode);
     let audio_href = format!("/api/audio?v={video_id}");
+    let video_href = format!("/api/video?v={video_id}&q=720");
     let recap = extractive_summary(&doc);
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
     let share = format!("/v/{video_id}");
@@ -742,6 +743,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 F.downloadAudio(ws, audioBtn.getAttribute("href") || "");
                 return;
             }
+            if (t.closest("[data-video]")) {
+                F.setStatus(ws, "Video download started. It can take a minute for higher qualities.", 8000);
+                return;
+            }
             if (t.closest("[data-apply]")) {
                 e.preventDefault();
                 F.applyLang(ws);
@@ -866,6 +871,15 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 F.mountPlayer(ws, ms);
             }
         });
+        document.addEventListener("change", (e) => {
+            const t = e.target instanceof Element ? e.target : null;
+            const sel = t?.closest("[data-vq]");
+            if (!sel || !(sel instanceof HTMLSelectElement)) return;
+            const ws = sel.closest("#ytt-ws") || liveWorkspace();
+            const a = ws?.querySelector("[data-video]");
+            const vid = ws?.dataset.vid;
+            if (a && vid) a.setAttribute("href", `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(sel.value)}`);
+        });
         document.addEventListener("submit", (e) => {
             const F = window.__yttForge;
             if (!F) return;
@@ -966,9 +980,21 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <a class="btn btn-ghost" href={watch} target="_blank" rel="noreferrer noopener">"Open on YouTube"</a>
                         <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
                     </p>
-                    <p>
+                    <div class="media-dl">
                         <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
-                    </p>
+                        <label>
+                            "Video quality"
+                            <select data-vq="" aria-label="Video download quality">
+                                <option value="360">"360p"</option>
+                                <option value="480">"480p"</option>
+                                <option value="720" selected=true>"720p"</option>
+                                <option value="1080">"1080p"</option>
+                                <option value="best">"Best available"</option>
+                            </select>
+                        </label>
+                        <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download video"</a>
+                    </div>
+                    <p class="hint">"Video files can be large. 360p is the lightest; 1080p needs more time."</p>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">

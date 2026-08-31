@@ -310,6 +310,7 @@ async fn main() -> std::io::Result<()> {
         .without_pwa()
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
+        .route("/api/video", get(api::video).options(api::preflight))
         .route("/api/ingest", post(api::ingest).options(api::preflight))
         .route("/api/translate", post(api::translate).options(api::preflight))
         .route("/api/gate", post(api::gate).options(api::preflight))
