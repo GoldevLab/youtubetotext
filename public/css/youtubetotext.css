@@ -542,6 +542,54 @@ select:focus-visible {
   font-size: 0.8rem;
 }
 
+.dl-dialog {
+  width: min(22.5rem, calc(100vw - 1.5rem));
+  max-height: min(90vh, 40rem);
+  overflow: auto;
+  padding: 1.15rem 1.15rem 1.05rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+
+.dl-dialog::backdrop {
+  background: rgb(12 12 14 / 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.dl-dialog h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+.dl-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.dl-dialog .ad-slot {
+  margin: 0.95rem 0 0.85rem;
+}
+
+.dl-dialog .ad-slot-rectangle {
+  max-width: 300px;
+}
+
+.dl-dialog .ad-slot-rectangle .ad-slot-frame {
+  min-height: 250px;
+  min-width: 250px;
+}
+
+.dl-dialog form {
+  margin: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .btn-secondary,
 .btn-ghost {
   background: var(--bg-soft);

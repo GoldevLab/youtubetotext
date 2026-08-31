@@ -395,6 +395,35 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (btn) btn.textContent = prev;
         }
     };
+    const armVideoDialog = (dlg) => {
+        if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
+        dlg.dataset.ready = "1";
+        if (!("closedBy" in HTMLDialogElement.prototype)) {
+            dlg.addEventListener("click", (event) => {
+                if (event.target !== dlg) return;
+                const rect = dlg.getBoundingClientRect();
+                const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height
+                    && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
+                if (!inside) dlg.close();
+            });
+        }
+    };
+    const startVideoDownload = (ws, href) => {
+        const dlg = ws.querySelector("[data-video-dlg]");
+        armVideoDialog(dlg);
+        if (dlg instanceof HTMLDialogElement && typeof dlg.showModal === "function") {
+            dlg.showModal();
+        }
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = "";
+        a.rel = "noopener";
+        a.setAttribute("data-r-full", "");
+        a.style.display = "none";
+        document.body.append(a);
+        a.click();
+        a.remove();
+    };
     const sourcePayload = (ws) => {
         const el = ws.querySelector("#ytt-source");
         try { return JSON.parse(el?.textContent || "{}"); } catch (_) { return {}; }
@@ -694,7 +723,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
 
     window.__yttForge = {
-        applyLang, downloadFmt, downloadAudio, mountPlayer, paintMode, applyFilters, setStatus,
+        applyLang, downloadFmt, downloadAudio, startVideoDownload, mountPlayer, paintMode, applyFilters, setStatus,
         parseId, go, visibleCues, writeClipboard, durationMs, wsData,
     };
 
@@ -743,8 +772,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 F.downloadAudio(ws, audioBtn.getAttribute("href") || "");
                 return;
             }
-            if (t.closest("[data-video]")) {
-                F.setStatus(ws, "Video download started. It can take a minute for higher qualities.", 8000);
+            const videoBtn = t.closest("[data-video]");
+            if (videoBtn) {
+                e.preventDefault();
+                F.startVideoDownload(ws, videoBtn.getAttribute("href") || "");
                 return;
             }
             if (t.closest("[data-apply]")) {
@@ -791,7 +822,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 const max = Math.floor(F.durationMs(ws) / 1000);
                 const fromInp = ws.querySelector("[data-from]");
                 const toInp = ws.querySelector("[data-to]");
-                const end = Math.max(Number(fromInp?.value || 0), max - n);
+            const end = Math.max(Number(fromInp?.value || 0), max - n);
                 if (toInp) toInp.value = String(end);
                 F.applyFilters(ws);
                 F.setStatus(ws, `Skipped the last ${n} seconds.`);
@@ -801,8 +832,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 S.rangePick = null;
                 S.pickRange = false;
                 const pickBtn = ws.querySelector("[data-pick-range]");
-                pickBtn?.setAttribute("aria-pressed", "false");
-                pickBtn?.classList.remove("is-on");
+        pickBtn?.setAttribute("aria-pressed", "false");
+        pickBtn?.classList.remove("is-on");
                 const fromInp = ws.querySelector("[data-from]");
                 const toInp = ws.querySelector("[data-to]");
                 if (fromInp) fromInp.value = "";
@@ -827,15 +858,15 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 editBtn.setAttribute("aria-pressed", on ? "true" : "false");
                 editBtn.classList.toggle("is-on", on);
                 ws.querySelectorAll("[data-cue-text]").forEach((span) => {
-                    span.contentEditable = on ? "true" : "false";
-                    span.spellcheck = true;
-                });
+            span.contentEditable = on ? "true" : "false";
+            span.spellcheck = true;
+        });
                 F.setStatus(ws, on ? "Edit lines, then Copy or download. Changes stay on this device." : "");
                 return;
             }
             const chapter = t.closest("[data-chapters] a[data-ms]");
             if (chapter) {
-                e.preventDefault();
+        e.preventDefault();
                 F.mountPlayer(ws, Number(chapter.dataset.ms || 0));
                 return;
             }
@@ -850,13 +881,13 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 if (S.pickRange) {
                     if (S.rangePick == null) {
                         S.rangePick = ms;
-                        if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
+                if (fromInp) fromInp.value = String(Math.floor(ms / 1000));
                         F.applyFilters(ws);
                         F.setStatus(ws, "Now click the last line to keep.");
-                        return;
-                    }
+                return;
+            }
                     let start = S.rangePick;
-                    let end = ms;
+            let end = ms;
                     if (end < start) { const tmp = start; start = end; end = tmp; }
                     if (fromInp) fromInp.value = String(Math.floor(start / 1000));
                     if (toInp) toInp.value = String(Math.floor(end / 1000));
@@ -866,8 +897,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     pick?.classList.remove("is-on");
                     F.applyFilters(ws);
                     F.setStatus(ws, "Range set. Copy and downloads use these lines.");
-                    return;
-                }
+            return;
+        }
                 F.mountPlayer(ws, ms);
             }
         });
@@ -888,23 +919,23 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             const ws = form.closest("#ytt-ws") || liveWorkspace();
             if (!ws) return;
             if (form.classList.contains("toolbar-lang")) {
-                e.preventDefault();
+        e.preventDefault();
                 F.applyLang(ws);
                 return;
             }
             if (form.hasAttribute("data-another")) {
-                e.preventDefault();
+        e.preventDefault();
                 const hp = form.querySelector('[name="website"]');
                 if (hp && String(hp.value || "").trim()) return;
                 const input = form.querySelector('input[name="url"]');
                 const err = form.querySelector("[data-another-error]");
                 const id = F.parseId(input?.value);
-                if (!id) {
+        if (!id) {
                     if (err) { err.hidden = false; err.textContent = "That does not look like a YouTube link."; }
-                    input?.focus();
-                    return;
-                }
-                if (err) err.hidden = true;
+            input?.focus();
+            return;
+        }
+        if (err) err.hidden = true;
                 F.go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(ws.dataset.mode || "text"));
             }
         });
@@ -930,17 +961,17 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             const map = {};
             for (const c of dataNow.cues) map[c.start_ms] = c.text;
             try { localStorage.setItem("youtubetotext-edits-" + (ws.dataset.vid || "") + "-" + (location.search || ""), JSON.stringify(map)); } catch (_) {}
-        });
-        document.addEventListener("keydown", (e) => {
+    });
+    document.addEventListener("keydown", (e) => {
             const ws = liveWorkspace();
             if (!ws) return;
-            const tag = document.activeElement?.tagName;
-            if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !document.activeElement?.isContentEditable) {
-                e.preventDefault();
+        const tag = document.activeElement?.tagName;
+        if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !document.activeElement?.isContentEditable) {
+            e.preventDefault();
                 ws.querySelector("[data-search]")?.focus();
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-                e.preventDefault();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+            e.preventDefault();
                 ws.querySelector("[data-search]")?.focus();
             }
             if ((e.key === "Enter" || e.key === " ") && document.activeElement?.classList?.contains("cue")) {
@@ -997,6 +1028,14 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                             <p class="hint">"360p is the smallest file. 1080p and Best take longer."</p>
                         </fieldset>
                     </div>
+                    <dialog class="dl-dialog" data-video-dlg="" closedby="any" aria-labelledby="ytt-vdl-title">
+                        <h2 id="ytt-vdl-title">"Your video is downloading"</h2>
+                        <p>"The file will save to your downloads folder. Higher qualities can take a minute."</p>
+                        {crate::ads::slot("workspace-video-dl", "rectangle")}
+                        <form method="dialog">
+                            <button type="submit" class="btn btn-primary">"Got it"</button>
+                        </form>
+                    </dialog>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">
