@@ -491,17 +491,44 @@ select:focus-visible {
   margin: 0.85rem 0 0.4rem;
 }
 
-.media-dl > .btn {
+.media-dl > .btn-primary {
   width: 100%;
   justify-content: center;
+}
+
+.media-dl-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.media-dl-row .btn {
+  flex: 1 1 auto;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .media-dl-qwrap {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+  height: 2.75rem;
   min-height: 2.75rem;
-  padding: 0 0.45rem 0 1.1rem;
+  padding: 0 0.85rem 0 1.05rem;
+  border-radius: var(--radius-btn);
+  background: var(--bg-soft);
+  cursor: pointer;
+}
+
+.media-dl-qwrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.95rem 0 1.15rem;
   border-radius: var(--radius-btn);
   background: var(--bg-soft);
   cursor: pointer;
@@ -513,32 +540,36 @@ select:focus-visible {
 
 .media-dl-qwrap > span {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   font-weight: 650;
-  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
 .media-dl-q {
   -webkit-appearance: none;
   appearance: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 4.6rem;
+  height: 1.5rem;
+  min-height: 0;
   margin: 0;
-  padding: 0 2.1rem 0 0.45rem;
+  padding: 0 1.35rem 0 0;
   border: 0;
-  border-radius: var(--radius-btn);
   background-color: transparent;
   background-image: light-dark(var(--select-chevron), var(--select-chevron-dark));
   background-repeat: no-repeat;
-  background-position: right 0.95rem center;
-  background-size: 0.72rem;
+  background-position: right center;
+  background-size: 0.7rem;
   color: var(--fg);
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 650;
-  line-height: 1.2;
+  line-height: 1.5rem;
   cursor: pointer;
 }
 
@@ -550,11 +581,14 @@ select:focus-visible {
 
   .media-dl-q {
     background-image: none;
-    padding-right: 0.85rem;
+    padding-right: 0.15rem;
+    height: auto;
+    line-height: 1;
   }
 
   .media-dl-q::picker-icon {
     color: var(--muted);
+    align-self: center;
   }
 
   .media-dl-q::picker(select) {
@@ -576,11 +610,6 @@ select:focus-visible {
   .media-dl-q option:is(:hover, :focus, :checked) {
     background: var(--bg-soft);
   }
-}
-
-.media-dl .hint {
-  margin: 0.1rem 0 0;
-  font-size: 0.8rem;
 }
 
 .dl-dialog {
