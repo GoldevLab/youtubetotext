@@ -484,26 +484,47 @@ select:focus-visible {
 }
 
 .media-dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.7rem;
-  align-items: end;
-  margin: 0.4rem 0 0.2rem;
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.7rem 0 0.35rem;
 }
 
-.media-dl label {
-  display: grid;
-  gap: 0.28rem;
-  font-size: 0.82rem;
-  font-weight: 650;
+.media-dl > .btn-primary {
+  width: 100%;
+  justify-content: center;
+}
+
+.media-dl-video {
+  margin: 0;
+  padding: 0.55rem 0.7rem 0.7rem;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-soft) 75%, transparent);
+}
+
+.media-dl-video legend {
+  padding: 0 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
-.media-dl select {
+.media-dl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.media-dl-row select {
   font: inherit;
   font-size: 1rem;
+  width: 100%;
+  min-width: 0;
   min-height: 2.6rem;
-  min-width: 8.5rem;
   padding: 0.4rem 0.6rem;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -511,8 +532,14 @@ select:focus-visible {
   color: var(--fg);
 }
 
-.player-col > .hint {
-  margin: 0.15rem 0 0.6rem;
+.media-dl-row .btn {
+  white-space: nowrap;
+  align-self: stretch;
+}
+
+.media-dl-video .hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
 }
 
 .btn-secondary,
