@@ -1013,20 +1013,19 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     </p>
                     <div class="media-dl">
                         <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
-                        <fieldset class="media-dl-video">
-                            <legend>"Video"</legend>
+                        <div class="media-dl-video">
                             <div class="media-dl-row">
-                                <select data-vq="" aria-label="Video quality">
+                                <select class="media-dl-q" data-vq="" aria-label="Video quality">
                                     <option value="360">"360p"</option>
                                     <option value="480">"480p"</option>
                                     <option value="720" selected=true>"720p"</option>
                                     <option value="1080">"1080p"</option>
                                     <option value="best">"Best"</option>
                                 </select>
-                                <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download"</a>
+                                <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download video"</a>
                             </div>
                             <p class="hint">"360p is the smallest file. 1080p and Best take longer."</p>
-                        </fieldset>
+                        </div>
                     </div>
                     <dialog class="dl-dialog" data-video-dlg="" closedby="any" aria-labelledby="ytt-vdl-title">
                         <h2 id="ytt-vdl-title">"Your video is downloading"</h2>
