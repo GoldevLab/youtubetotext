@@ -822,7 +822,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 <div class="player-card">
                     <div class="player-facade" data-player="">
                         <button type="button" class="play-hit" data-play="" aria-label="Play video">
-                            <img src={thumb} alt={thumb_alt} width="480" height="360" />
+                            <img src={thumb} alt={thumb_alt} width="480" height="360" fetchpriority="high" decoding="async" />
                             <span class="play-badge" aria-hidden="true">"Play"</span>
                         </button>
                     </div>
