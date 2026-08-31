@@ -530,22 +530,10 @@ select:focus-visible {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: 0.45rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  padding: 0 0.85rem 0 1.05rem;
-  border-radius: var(--radius-btn);
-  background: var(--bg-soft);
-  cursor: pointer;
-}
-
-.media-dl-qwrap {
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
   height: 2.75rem;
   min-height: 2.75rem;
-  padding: 0 0.95rem 0 1.15rem;
+  padding: 0 0.75rem 0 1.1rem;
   border-radius: var(--radius-btn);
   background: var(--bg-soft);
   cursor: pointer;
@@ -570,17 +558,20 @@ select:focus-visible {
   appearance: none;
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   flex: 0 0 auto;
-  width: 5.1rem;
+  width: 7.25rem;
+  min-width: 7.25rem;
   height: 1.5rem;
   min-height: 0;
   margin: 0;
-  padding: 0 1.35rem 0 0;
+  padding: 0 1.85rem 0 0.2rem;
   border: 0;
+  overflow: visible;
   background-color: transparent;
   background-image: light-dark(var(--select-chevron), var(--select-chevron-dark));
   background-repeat: no-repeat;
-  background-position: right center;
+  background-position: right 0.15rem center;
   background-size: 0.7rem;
   color: var(--fg);
   font: inherit;
@@ -588,6 +579,7 @@ select:focus-visible {
   font-weight: 650;
   line-height: 1.5rem;
   cursor: pointer;
+  field-sizing: content;
 }
 
 @supports (appearance: base-select) {
@@ -598,7 +590,9 @@ select:focus-visible {
 
   .media-dl-q {
     background-image: none;
-    padding-right: 0.15rem;
+    padding-right: 1.85rem;
+    min-width: 7.25rem;
+    width: 7.25rem;
     height: auto;
     line-height: 1;
   }
