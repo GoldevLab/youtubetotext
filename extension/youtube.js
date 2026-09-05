@@ -36,7 +36,7 @@ function mount() {
           return;
         }
         const origins = ["http://127.0.0.1:3010", "https://youtubetotext.fly.dev"];
-        let dest = `https://youtubetotext.fly.dev/v/${id}`;
+        let dest = `https://youtubetotext.fly.dev/?v=${id}&mode=text`;
         for (const origin of origins) {
           try {
             const r = await fetch(`${origin}/api/ingest`, {
@@ -45,7 +45,7 @@ function mount() {
               body: JSON.stringify(res.doc),
             });
             if (r.ok) {
-              dest = `${origin}/v/${id}`;
+              dest = `${origin}/?v=${id}&mode=text`;
               break;
             }
           } catch {

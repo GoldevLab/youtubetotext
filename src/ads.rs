@@ -2,26 +2,45 @@
 //! `ADSENSE_CLIENT` plus a slot id are set.
 //!
 //! Slot lookup (first match): `ADSENSE_SLOT_{PLACEMENT}` (hyphens → `_`),
-//! then `ADSENSE_SLOT_{SIZE}` (`leaderboard` | `infeed` | `rectangle`).
+//! then `ADSENSE_SLOT_{SIZE}` (`leaderboard` | `infeed` | `rectangle`),
+//! then `ADSENSE_SLOT` (one unit for every placement).
 
 use resuma::prelude::*;
 use resuma::server::CspConfig;
 
 const CLIENT_ENV: &str = "ADSENSE_CLIENT";
 
+/// Scripts, pixels, XHR, and ad frames Google AdSense loads.
 const ADSENSE_ORIGINS: &[&str] = &[
     "https://pagead2.googlesyndication.com",
     "https://googleads.g.doubleclick.net",
     "https://tpc.googlesyndication.com",
     "https://www.google.com",
     "https://www.gstatic.com",
+    "https://www.googleadservices.com",
+    "https://adservice.google.com",
+    "https://www.googletagservices.com",
+    "https://partner.googleadservices.com",
     "https://ep1.adtrafficquality.google",
     "https://ep2.adtrafficquality.google",
     "https://fundingchoicesmessages.google.com",
 ];
 
+/// Thumbnails, IFrame API, and nocookie embed host.
+const YOUTUBE_ORIGINS: &[&str] = &[
+    "https://www.youtube.com",
+    "https://youtube.com",
+    "https://www.youtube-nocookie.com",
+    "https://i.ytimg.com",
+    "https://i9.ytimg.com",
+    "https://s.ytimg.com",
+];
+
 pub fn client_id() -> Option<String> {
-    std::env::var(CLIENT_ENV).ok().as_deref().and_then(sanitize_client)
+    std::env::var(CLIENT_ENV)
+        .ok()
+        .as_deref()
+        .and_then(sanitize_client)
 }
 
 fn sanitize_client(raw: &str) -> Option<String> {
@@ -43,31 +62,29 @@ fn sanitize_slot(raw: &str) -> Option<String> {
     }
 }
 
+fn env_slot(name: &str) -> Option<String> {
+    std::env::var(name).ok().as_deref().and_then(sanitize_slot)
+}
+
 fn slot_id(placement: &str, size: &str) -> Option<String> {
     let specific = format!(
         "ADSENSE_SLOT_{}",
         placement.replace('-', "_").to_ascii_uppercase()
     );
-    if let Some(id) = std::env::var(&specific).ok().as_deref().and_then(sanitize_slot) {
-        return Some(id);
-    }
-    let by_size = format!("ADSENSE_SLOT_{}", size.trim().to_ascii_uppercase());
-    std::env::var(&by_size)
-        .ok()
-        .as_deref()
-        .and_then(sanitize_slot)
+    env_slot(&specific)
+        .or_else(|| env_slot(&format!("ADSENSE_SLOT_{}", size.trim().to_ascii_uppercase())))
+        .or_else(|| env_slot("ADSENSE_SLOT"))
 }
 
 pub fn head_snippet() -> String {
     match client_id() {
         Some(id) => format!(
             r#"<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin="anonymous" />
+<link rel="preconnect" href="https://googleads.g.doubleclick.net" crossorigin="anonymous" />
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={id}" crossorigin="anonymous"></script>
 <script type="module" src="/js/youtubetotext-ads.js"></script>"#
         ),
-        None => {
-            r#"<script type="module" src="/js/youtubetotext-ads.js"></script>"#.into()
-        }
+        None => r#"<script type="module" src="/js/youtubetotext-ads.js"></script>"#.into(),
     }
 }
 
@@ -77,22 +94,21 @@ pub fn ads_txt() -> Option<String> {
     Some(format!("google.com, {pub_id}, DIRECT, f08c47fec0942fa0\n"))
 }
 
+/// Allow YouTube embeds + AdSense. Resuma 1.3.1 has no `frame-src` knob, so the
+/// policy stays report-only: enforcing `default-src 'self'` would blank the
+/// player and the ad iframes. Host allowlists are still emitted so a later
+/// Resuma with `frame-src` can enforce without another app change.
 pub fn apply_csp(csp: &mut CspConfig) {
-    if client_id().is_none() {
-        return;
-    }
-    for origin in ADSENSE_ORIGINS {
+    // `'strict-dynamic'` ignores host allowlists; adsbygoogle.js in `<head>`
+    // is not nonce'd by Resuma, so it would never run.
+    csp.strict_dynamic = false;
+    for origin in YOUTUBE_ORIGINS.iter().chain(ADSENSE_ORIGINS) {
         push_unique(&mut csp.script_src, origin);
         push_unique(&mut csp.img_src, origin);
         push_unique(&mut csp.connect_src, origin);
+        push_unique(&mut csp.style_src, origin);
     }
-    let enforce = matches!(
-        std::env::var("ADSENSE_ENFORCE_CSP").as_deref(),
-        Ok("1") | Ok("true") | Ok("TRUE")
-    );
-    if !enforce {
-        csp.report_only = true;
-    }
+    csp.report_only = true;
 }
 
 fn push_unique(list: &mut Vec<String>, origin: &str) {
@@ -114,6 +130,7 @@ pub fn slot(placement: &'static str, size: &'static str) -> View {
                     <div class="ad-slot-frame">
                         <ins
                             class="adsbygoogle"
+                            style="display:block"
                             data-ad-client={client}
                             data-ad-slot={unit}
                             data-ad-format="auto"
@@ -130,6 +147,7 @@ pub fn slot(placement: &'static str, size: &'static str) -> View {
                     <div class="ad-slot-frame">
                         <ins
                             class="adsbygoogle"
+                            style="display:block"
                             data-ad-client={client}
                             data-ad-slot={unit}
                             data-ad-format="auto"

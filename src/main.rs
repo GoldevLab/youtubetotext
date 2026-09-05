@@ -16,7 +16,11 @@ mod tool;
 mod workspace;
 mod youtube;
 
+use axum::extract::{Path, Query};
+use axum::http::Uri;
+use axum::response::Redirect;
 use axum::routing::{get, post};
+use serde::Deserialize;
 use pages::PagesRegistry;
 use resuma::prelude::*;
 use resuma::SeoKit;
@@ -39,6 +43,11 @@ fn chrome(body: View) -> View {
     );
     view! {
         <div class="app">
+            <div class="liquid-orbs" aria-hidden="true">
+                <div class="liquid-blob liquid-blob-a"></div>
+                <div class="liquid-blob liquid-blob-b"></div>
+                <div class="liquid-blob liquid-blob-c"></div>
+            </div>
             <header class="site-header">
                 <div class="header-inner">
                     <NavLink href="/" class="brand" activeClass="is-active" exact=true>
@@ -53,6 +62,7 @@ fn chrome(body: View) -> View {
                 {crate::ads::slot("footer", "leaderboard")}
             </div>
             <footer class="site-footer">
+                {crate::cross_sell::sister_apps_links()}
                 <p>
                     <strong>"YouTubeForge"</strong>
                     " — YouTube transcripts, audio, translation, summaries, and SRT. Not affiliated with YouTube or Google."
@@ -217,11 +227,51 @@ fn not_found() -> View {
     })
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct LegacyVidQuery {
+    #[serde(default)]
+    mode: String,
+    #[serde(default)]
+    lang: String,
+    #[serde(default)]
+    tlang: String,
+}
+
+async fn redirect_home() -> Redirect {
+    Redirect::permanent("/")
+}
+
+async fn redirect_app_youtube(uri: Uri) -> Redirect {
+    match uri.query() {
+        Some(q) if !q.is_empty() => Redirect::permanent(&format!("/?{q}")),
+        _ => Redirect::permanent("/"),
+    }
+}
+
+async fn redirect_video(Path(id): Path<String>, Query(q): Query<LegacyVidQuery>) -> Redirect {
+    let mode = if q.mode.trim().is_empty() {
+        "text"
+    } else {
+        q.mode.trim()
+    };
+    let mut url = format!("/?v={id}&mode={mode}");
+    if !q.lang.trim().is_empty() {
+        url.push_str("&lang=");
+        url.push_str(q.lang.trim());
+    }
+    if !q.tlang.trim().is_empty() {
+        url.push_str("&tlang=");
+        url.push_str(q.tlang.trim());
+    }
+    Redirect::permanent(&url)
+}
+
 const HEAD: &str = r##"
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
+<script type="module" src="/js/youtubetotext.js?v=1"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -237,17 +287,7 @@ fn seo_kit() -> SeoKit {
              and trim sections. No account.",
         )
         .with_default_json_ld()
-        .push_json_ld(json!({
-            "@context": "https://schema.org",
-            "@type": "WebApplication",
-            "name": "YouTubeForge",
-            "alternateName": ["YouTube transcript", "YouTube to text"],
-            "url": "https://youtubetotext.fly.dev",
-            "applicationCategory": "UtilitiesApplication",
-            "operatingSystem": "Web",
-            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-            "description": "Free YouTube transcript tool: search, download SRT/VTT, translate captions, save audio. No account."
-        }))
+        .push_json_ld(crate::landing::web_application_json_ld())
         .push_json_ld(json!({
             "@context": "https://schema.org",
             "@type": "FAQPage",
@@ -265,7 +305,7 @@ fn seo_kit() -> SeoKit {
                     "name": "How do I access the transcript after generating it?",
                     "acceptedAnswer": {
                         "@type": "Answer",
-                        "text": "Every transcript has a shareable URL at /v/{videoId}. Optional query params: lang and tlang. Bookmark or paste that link — search engines and notes apps can read the text."
+                        "text": "Every transcript has a shareable URL at /?v={videoId}&mode=text. Optional query params: lang, tlang, and mode (audio, translate, summary, srt)."
                     }
                 },
                 {
@@ -286,11 +326,11 @@ fn seo_kit() -> SeoKit {
                 }
             ]
         }));
-    kit.theme_color = Some("#FF0000".into());
+    kit.theme_color = Some("#14090a".into());
     kit.author = "YouTubeForge".into();
     kit.llms_sections = vec![(
         "How to use".into(),
-        "Open / with a YouTube URL, or go to /v/{videoId}. Optional query: lang, tlang.".into(),
+        "Open / and paste a YouTube URL, or open /?v={videoId}&mode=text. Optional query: lang, tlang, mode.".into(),
     )];
     kit.ai.disallow = vec!["/api/".into()];
     kit
@@ -318,6 +358,12 @@ async fn main() -> std::io::Result<()> {
         .with_og_image("/og.svg")
         .with_head(head)
         .with_seo_kit(seo_kit())
+        .with_html_theme(
+            HtmlTheme::new(["studio"])
+                .dark(["studio"])
+                .cookie("ytt_theme")
+                .storage_key("ytt-theme"),
+        )
         .with_stylesheet("/css/youtubetotext.css");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -327,16 +373,20 @@ async fn main() -> std::io::Result<()> {
             name: "YouTubeForge".into(),
             short_name: "Yf".into(),
             description: "YouTube transcripts, audio, SRT, translation, and summaries.".into(),
-            theme_color: "#FF0000".into(),
-            background_color: "#0f0f0f".into(),
+            theme_color: "#14090a".into(),
+            background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-1".into(),
+            cache_version: "yf-6".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("Y".into()),
-            precache_paths: vec!["/css/youtubetotext.css".into()],
+            precache_paths: vec![
+                "/themes.css".into(),
+                "/css/youtubetotext.css".into(),
+                "/js/youtubetotext.js?v=1".into(),
+            ],
             shortcuts: vec![PwaShortcut {
                 name: "New transcript".into(),
                 short_name: "Home".into(),
@@ -346,6 +396,15 @@ async fn main() -> std::io::Result<()> {
             offline_message: "YouTubeForge needs a connection to fetch captions and downloads. Reconnect and try again.".into(),
             manifest_icons: Vec::new(),
         })
+        .route("/youtube-to-text", get(redirect_home))
+        .route("/youtube-to-audio", get(redirect_home))
+        .route("/youtube-translator", get(redirect_home))
+        .route("/youtube-summary", get(redirect_home))
+        .route("/youtube-to-srt", get(redirect_home))
+        .route("/app/youtube", get(redirect_app_youtube))
+        .route("/extension", get(redirect_home))
+        .route("/api", get(redirect_home))
+        .route("/v/{id}", get(redirect_video))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))

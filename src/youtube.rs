@@ -1,7 +1,6 @@
 //! Fetch public YouTube captions in pure Rust (InnerTube + timedtext).
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
@@ -65,7 +64,8 @@ static AUDIO_CACHE: Lazy<Mutex<Vec<(String, Instant, Vec<AudioPick>)>>> =
 /// Skip timedtext after a 429 so we do not make the ban worse.
 static RATE_LIMIT_UNTIL: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(45);
-static SKIP_GTX: AtomicBool = AtomicBool::new(false);
+static SKIP_GTX_UNTIL: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
+const GTX_COOLDOWN: Duration = Duration::from_secs(90);
 
 #[derive(Debug, Clone)]
 pub struct FetchError {
@@ -1563,10 +1563,13 @@ async fn gtx_text(sl: &str, tl: &str, text: &str) -> Result<String, FetchError> 
     if text.trim().is_empty() {
         return Ok(text.to_string());
     }
-    if !SKIP_GTX.load(Ordering::Relaxed) {
+    let skip_gtx = SKIP_GTX_UNTIL
+        .lock()
+        .is_some_and(|until| Instant::now() < until);
+    if !skip_gtx {
         match gtx_text_once(sl, tl, text).await {
             Ok(s) => return Ok(s),
-            Err(_) => SKIP_GTX.store(true, Ordering::Relaxed),
+            Err(_) => *SKIP_GTX_UNTIL.lock() = Some(Instant::now() + GTX_COOLDOWN),
         }
     }
     mymemory_text(sl, tl, text).await
@@ -2128,7 +2131,7 @@ pub async fn download_video(
 }
 
 pub fn normalize_audio_format(raw: Option<&str>) -> &'static str {
-    match raw.unwrap_or("m4a").trim().to_ascii_lowercase().as_str() {
+    match raw.unwrap_or("mp3").trim().to_ascii_lowercase().as_str() {
         "mp3" | "mpeg" => "mp3",
         "opus" | "webm" | "ogg" => "opus",
         "wav" => "wav",
@@ -2511,7 +2514,7 @@ mod tests {
 
     #[test]
     fn audio_format_aliases() {
-        assert_eq!(normalize_audio_format(None), "m4a");
+        assert_eq!(normalize_audio_format(None), "mp3");
         assert_eq!(normalize_audio_format(Some("MP3")), "mp3");
         assert_eq!(normalize_audio_format(Some("webm")), "opus");
         assert_eq!(audio_ytdlp_plan("mp3").3, "mp3");

@@ -32,16 +32,19 @@ fn idle() -> View {
     );
     view! {
         <main class="home-page">
-            <section class="hero">
-                <div class="hero-copy">
-                    <p class="eyebrow">"Free YouTube transcript"</p>
-                    <h1>"Get the text from a YouTube video"</h1>
-                    <p class="hero-lead">
-                        "Paste a public link. Search the captions, copy them, or download SRT. From the same result you can save the audio, translate, or get a short recap — without pasting again."
-                    </p>
-                    {home_search(Mode::Text)}
-                </div>
-            </section>
+            <div class="hero-wrap">
+                <div class="hero-particles" data-hero-particles="" aria-hidden="true"></div>
+                <section class="hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow">"Free YouTube transcript"</p>
+                        <h1>"Get the text from a YouTube video"</h1>
+                        <p class="hero-lead">
+                            "Paste a public link. Search the captions, copy them, or download SRT. From the same result you can save the audio, translate, or get a short recap — without pasting again."
+                        </p>
+                        {home_search(Mode::Text)}
+                    </div>
+                </section>
+            </div>
             {crate::ads::slot("home-hero", "infeed")}
             <section class="howto" aria-labelledby="howto-title">
                 <h2 id="howto-title">"How it works"</h2>
@@ -61,6 +64,7 @@ fn idle() -> View {
                 </ol>
             </section>
             {crate::ads::slot("home-faq", "infeed")}
+            {crate::cross_sell::sister_apps()}
         </main>
     }
 }

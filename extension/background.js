@@ -29,7 +29,7 @@ chrome.action.onClicked.addListener(async (tab) => {
           body: JSON.stringify(doc),
         });
         if (r.ok) {
-          await chrome.tabs.create({ url: `${origin}/v/${id}` });
+          await chrome.tabs.create({ url: `${origin}/?v=${id}&mode=text` });
           opened = true;
           break;
         }
@@ -37,10 +37,10 @@ chrome.action.onClicked.addListener(async (tab) => {
         /* try next origin */
       }
     }
-    if (!opened) await chrome.tabs.create({ url: `https://youtubetotext.fly.dev/v/${id}` });
+    if (!opened) await chrome.tabs.create({ url: `https://youtubetotext.fly.dev/?v=${id}&mode=text` });
   } catch {
     await chrome.tabs.create({
-      url: `${SITE}/v/${id}`,
+      url: `${SITE}/?v=${id}&mode=text`,
     });
   }
 });

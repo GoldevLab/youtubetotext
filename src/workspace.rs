@@ -106,11 +106,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         format!("{cue_count} lines · {words} words · ~{read_mins} min read · {duration}")
     };
     let parsed_mode = Mode::parse(&mode);
-    let audio_href = format!("/api/audio?v={video_id}&fmt=m4a");
+    let audio_href = format!("/api/audio?v={video_id}&fmt=mp3");
     let video_href = format!("/api/video?v={video_id}&q=720");
     let recap = extractive_summary(&doc);
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
-    let share = format!("/v/{video_id}");
+    let share = crate::family::app_href(&video_id, parsed_mode);
     let mode_slug = parsed_mode.slug().to_string();
 
     visible_task!(
@@ -1046,8 +1046,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                             <label class="media-dl-qwrap">
                                 <span>"Format"</span>
                                 <select class="media-dl-q" data-afmt="" aria-label="Audio format">
-                                    <option value="m4a" selected=true>"M4A"</option>
-                                    <option value="mp3">"MP3"</option>
+                                    <option value="m4a">"M4A"</option>
+                                    <option value="mp3" selected=true>"MP3"</option>
                                     <option value="opus">"Opus"</option>
                                     <option value="wav">"WAV"</option>
                                 </select>

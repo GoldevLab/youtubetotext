@@ -8,17 +8,7 @@ Live: [youtubetotext.fly.dev](https://youtubetotext.fly.dev)
 
 ## What it does
 
-YouTubeForge family (one app, several SEO URLs):
-
-| Landing | App |
-|---|---|
-| `/youtube-to-text` | Transcript |
-| `/youtube-to-audio` | Audio download (`GET /api/audio?v=`) |
-| `/youtube-translator` | Caption `tlang` |
-| `/youtube-summary` | Chapter recap + prompts |
-| `/youtube-to-srt` | SRT/VTT |
-
-Paste once on `/`. Tools for the same video (audio, translate, summary, SRT) sit in the transcript column. Shareable pages stay at `/v/{id}`.
+Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (audio, translate, summary, and SRT stay on that same page). Old landings like `/youtube-to-text` and `/v/{id}` redirect there.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
@@ -29,22 +19,27 @@ The public API and video loads are rate-limited per IP so scrapers cannot drain 
 
 ## Google AdSense
 
-Slots stay reserved (leaderboard / infeed / rectangle). Placeholders until you set a publisher ID and unit IDs.
+Slots stay reserved (leaderboard / infeed / rectangle). Placeholders until you set a publisher ID and at least one unit ID. Do not commit these values.
 
 ```bash
-# local
-ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
-ADSENSE_SLOT_LEADERBOARD=1234567890
-ADSENSE_SLOT_INFEED=1234567891
-ADSENSE_SLOT_RECTANGLE=1234567892
+# local — one client + one responsive display unit is enough to fill every slot
+export ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
+export ADSENSE_SLOT=1234567890
+
+# or one unit per size
+export ADSENSE_SLOT_LEADERBOARD=1234567890
+export ADSENSE_SLOT_INFEED=1234567891
+export ADSENSE_SLOT_RECTANGLE=1234567892
 
 # optional per placement, e.g. home-hero → ADSENSE_SLOT_HOME_HERO
-# fly
-fly secrets set ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx \
-  ADSENSE_SLOT_LEADERBOARD=… ADSENSE_SLOT_INFEED=… ADSENSE_SLOT_RECTANGLE=…
+
+# Fly (secrets, not fly.toml)
+fly secrets set ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx ADSENSE_SLOT=1234567890
 ```
 
-With `ADSENSE_CLIENT` set, the app serves `/ads.txt` and loads `adsbygoogle.js`. Create matching display units in AdSense (responsive). Rectangle units fill when the download dialog opens.
+In AdSense: create **Display ads → Responsive**. Copy `ca-pub-…` and the numeric slot. After deploy, `/ads.txt` is served automatically. Rectangle units also fill when the download dialog opens.
+
+CSP stays on as report-only so AdSense iframes and the YouTube player are not blocked (Resuma 1.3.1 has no `frame-src` yet).
 
 ## Development
 
@@ -70,4 +65,4 @@ fly deploy --remote-only --ha=false
 
 App name: `youtubetotext` → `https://youtubetotext.fly.dev`
 
-CSP is off (`RESUMA_CSP=0`) so the YouTube embed can load after you press Play.
+CSP is report-only so YouTube thumbnails, the nocookie player, and AdSense iframes can load.

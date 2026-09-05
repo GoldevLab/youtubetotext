@@ -106,7 +106,7 @@ pub fn home_search(mode: Mode) -> View {
     const syncDlHrefs = () => {
         const id = parseId(input?.value);
         const q = root.querySelector("[data-vq]")?.value || "720";
-        const afmt = root.querySelector("[data-afmt]")?.value || "m4a";
+        const afmt = root.querySelector("[data-afmt]")?.value || "mp3";
         const video = root.querySelector("[data-home-video]");
         const audio = root.querySelector("[data-home-audio]");
         if (video) video.href = id ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}` : "/api/video";
@@ -280,8 +280,8 @@ pub fn home_search(mode: Mode) -> View {
                     <label class="media-dl-qwrap">
                         <span>"Format"</span>
                         <select class="media-dl-q" data-afmt="" aria-label="Audio format">
-                            <option value="m4a" selected=true>"M4A"</option>
-                            <option value="mp3">"MP3"</option>
+                            <option value="m4a">"M4A"</option>
+                            <option value="mp3" selected=true>"MP3"</option>
                             <option value="opus">"Opus"</option>
                             <option value="wav">"WAV"</option>
                         </select>

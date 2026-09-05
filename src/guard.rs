@@ -42,7 +42,7 @@ pub const VIDEO: Limit = Limit {
 };
 pub const TRANSLATE: Limit = Limit {
     bucket: "translate",
-    max: 80,
+    max: 200,
 };
 pub const INGEST: Limit = Limit {
     bucket: "ingest",
