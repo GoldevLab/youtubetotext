@@ -60,12 +60,12 @@ pub fn seo_landing(mode: Mode) -> View {
         })
         .collect();
 
+    // Page-scoped JSON-LD in <head> (CSP nonce included) replaces the kit's
+    // site-wide FAQPage, so this landing carries exactly one FAQ block.
+    set_page_json_ld(faq_ld);
+
     view! {
         <main class="home-page landing-page">
-            {View::raw(format!(
-                r#"<script type="application/ld+json">{}</script>"#,
-                faq_ld
-            ))}
             <section class="hero">
                 <div class="hero-copy">
                     <p class="eyebrow">{landing.eyebrow}</p>

@@ -305,8 +305,12 @@ h3 {
 }
 
 .hero-form.is-busy {
-  opacity: 0.72;
+  opacity: 0.86;
   pointer-events: none;
+}
+
+.hero-form.is-busy .btn-primary {
+  cursor: progress;
 }
 
 .hp-field {
@@ -484,6 +488,41 @@ h3 {
 
 .btn:active {
   transform: scale(0.97);
+}
+
+.btn.is-busy {
+  cursor: progress;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+.btn .btn-spinner {
+  display: none;
+  width: 1.05em;
+  height: 1.05em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.btn.is-busy .btn-spinner,
+.btn[aria-busy="true"] .btn-spinner {
+  display: inline-block;
+  animation: ytt-spin 0.65s linear infinite;
+}
+
+@keyframes ytt-spin {
+  to { transform: rotate(1turn); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-busy .btn-spinner,
+  .btn[aria-busy="true"] .btn-spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.55;
+  }
 }
 
 .btn:focus-visible,

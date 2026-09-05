@@ -46,7 +46,9 @@ pub fn home_search(mode: Mode) -> View {
     const go = (path) => {
         document.documentElement.classList.add("is-navigating");
         if (typeof __resuma?.navigate === "function") {
-            Promise.resolve(__resuma.navigate(path)).finally(() => {
+            Promise.resolve(__resuma.navigate(path)).catch(() => {
+                location.assign(path);
+            }).finally(() => {
                 document.documentElement.classList.remove("is-navigating");
             });
         } else {
@@ -123,8 +125,8 @@ pub fn home_search(mode: Mode) -> View {
             });
         }
     };
-    const startFileDownload = (href, kind) => {
-        const dlg = root.querySelector("[data-dl-dlg]") || root.querySelector("[data-video-dlg]");
+    const startFileDownload = async (href, kind) => {
+        const dlg = root.querySelector("#r-modal-media-dl") || root.querySelector(".dl-dialog");
         armVideoDialog(dlg);
         if (dlg instanceof HTMLDialogElement) {
             const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
@@ -133,7 +135,13 @@ pub fn home_search(mode: Mode) -> View {
             if (lead) lead.textContent = kind === "audio"
                 ? "The file will save to your downloads folder. MP3 conversion can take a moment."
                 : "The file will save to your downloads folder. Higher qualities can take a minute.";
-            if (typeof dlg.showModal === "function") dlg.showModal();
+            try {
+                const open = globalThis.__resuma?.showModal?.("media-dl");
+                if (open && typeof open.then === "function") await open;
+                else if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+            } catch (_) {
+                if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+            }
             try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
         }
         const a = document.createElement("a");
@@ -207,6 +215,12 @@ pub fn home_search(mode: Mode) -> View {
             }
         }
         form?.classList.add("is-busy");
+        const submitBtn = form?.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.setAttribute("aria-busy", "true");
+            submitBtn.classList.add("is-busy");
+        }
         saveRecent(id, id);
         go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(mode));
     });
@@ -256,7 +270,10 @@ pub fn home_search(mode: Mode) -> View {
                             aria-describedby="url-help url-error"
                         />
                         <button type="button" class="btn btn-ghost" data-paste="" hidden="">"Paste"</button>
-                        <button type="submit" class="btn btn-primary">{cta}</button>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>{cta}</span>
+                        </button>
                     </span>
                 </label>
                 <div class="hero-dl">
@@ -289,14 +306,14 @@ pub fn home_search(mode: Mode) -> View {
                 <p id="url-error" class="hint form-error" data-form-error="" hidden="" role="alert"></p>
             </Form>
             <div class="recents" data-recents="" hidden=""></div>
-            <dialog class="dl-dialog" data-dl-dlg="" data-video-dlg="" closedby="any" aria-labelledby="ytt-home-vdl-title">
+            <Modal id="media-dl" closedBy="any" class="dl-dialog">
                 <h2 id="ytt-home-vdl-title" data-dl-title="">"Your file is downloading"</h2>
                 <p data-dl-lead="">"The file will save to your downloads folder."</p>
                 {crate::ads::slot("home-video-dl", "rectangle")}
                 <form method="dialog">
                     <button type="submit" class="btn btn-primary">"Got it"</button>
                 </form>
-            </dialog>
+            </Modal>
         </div>
     }
 }

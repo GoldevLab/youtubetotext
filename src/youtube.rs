@@ -1543,9 +1543,18 @@ async fn gtx_batch(sl: &str, tl: &str, batch: &[&str]) -> Result<Vec<String>, Fe
     if parts.len() == batch.len() {
         return Ok(parts);
     }
+    // Provider dropped our separators — translate lines with bounded concurrency.
     let mut out = Vec::with_capacity(batch.len());
-    for line in batch {
-        out.push(gtx_text(sl, tl, line).await?);
+    for group in batch.chunks(8) {
+        let futs = group.iter().map(|line| {
+            let line = (*line).to_string();
+            let sl = sl.to_string();
+            let tl = tl.to_string();
+            async move { gtx_text(&sl, &tl, &line).await }
+        });
+        for item in futures_util::future::join_all(futs).await {
+            out.push(item?);
+        }
     }
     Ok(out)
 }

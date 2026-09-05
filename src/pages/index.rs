@@ -19,6 +19,9 @@ pub fn page(req: FlowRequest) -> View {
     set_page_description(
         "Transcript loaded. Download audio, translate captions, summarize, or export SRT — same video.",
     );
+    // `/?v=…&mode=…` is an unbounded, per-video URL space: keep it out of the
+    // index (the canonical already points at `/`).
+    set_page_robots("noindex, follow");
     transcript_workspace(req, video_id, mode)
 }
 

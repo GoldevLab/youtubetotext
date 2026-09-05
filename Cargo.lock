@@ -1411,8 +1411,8 @@ dependencies = [
 
 [[package]]
 name = "resuma"
-version = "1.3.0"
-source = "git+https://github.com/GoldevLab/resuma.git#5ff2669932618abb3a476fed77d833b5be10ee48"
+version = "1.3.1"
+source = "git+https://github.com/GoldevLab/resuma.git#2cb2505fd6e5a4d3d459065d64d65e31a27b4b62"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1447,8 +1447,8 @@ dependencies = [
 
 [[package]]
 name = "resuma-macros"
-version = "1.3.0"
-source = "git+https://github.com/GoldevLab/resuma.git#5ff2669932618abb3a476fed77d833b5be10ee48"
+version = "1.3.1"
+source = "git+https://github.com/GoldevLab/resuma.git#2cb2505fd6e5a4d3d459065d64d65e31a27b4b62"
 dependencies = [
  "proc-macro2",
  "quote",

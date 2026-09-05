@@ -239,7 +239,9 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     const go = (path) => {
         document.documentElement.classList.add("is-navigating");
         if (typeof __resuma?.navigate === "function") {
-            Promise.resolve(__resuma.navigate(path)).finally(() => {
+            Promise.resolve(__resuma.navigate(path)).catch(() => {
+                location.assign(path);
+            }).finally(() => {
                 document.documentElement.classList.remove("is-navigating");
             });
         } else {
@@ -306,8 +308,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             status.textContent = t || "";
             status.hidden = !t;
         });
-        const applyBtn = ws?.querySelector("[data-apply]");
-        if (applyBtn && t && holdOrMs === true) applyBtn.textContent = t.length > 28 ? "Translating…" : t;
         const hold = holdOrMs === true;
         const ms = typeof holdOrMs === "number" ? holdOrMs : 4000;
         if (t && !hold) setTimeout(() => {
@@ -315,6 +315,28 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 if (status.textContent === t) { status.textContent = ""; status.hidden = true; }
             });
         }, ms);
+    };
+    const setBtnBusy = (btn, busy, label) => {
+        if (!btn) return;
+        const labelEl = btn.querySelector("[data-apply-label]");
+        if (busy) {
+            if (!btn.dataset.idleLabel) {
+                btn.dataset.idleLabel = (labelEl?.textContent || btn.textContent || "Apply").trim() || "Apply";
+            }
+            btn.disabled = true;
+            btn.setAttribute("aria-busy", "true");
+            btn.classList.add("is-busy");
+            if (labelEl) labelEl.textContent = label || "Working…";
+            else btn.textContent = label || "Working…";
+        } else {
+            btn.disabled = false;
+            btn.removeAttribute("aria-busy");
+            btn.classList.remove("is-busy");
+            const idle = btn.dataset.idleLabel || "Apply";
+            delete btn.dataset.idleLabel;
+            if (labelEl) labelEl.textContent = idle;
+            else btn.textContent = idle;
+        }
     };
     const downloadFmt = (ws, fmt) => {
         const cues = visibleCues(ws);
@@ -374,8 +396,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         }
     };
     const startVideoDownload = (ws, href) => startMediaDownload(ws, href, "video");
-    const startMediaDownload = (ws, href, kind) => {
-        const dlg = ws.querySelector("[data-dl-dlg]") || ws.querySelector("[data-video-dlg]");
+    const startMediaDownload = async (ws, href, kind) => {
+        const dlg = ws.querySelector("#r-modal-media-dl") || ws.querySelector(".dl-dialog");
         armVideoDialog(dlg);
         if (dlg instanceof HTMLDialogElement) {
             const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
@@ -384,7 +406,13 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (lead) lead.textContent = kind === "audio"
                 ? "The file will save to your downloads folder. MP3 conversion can take a moment."
                 : "The file will save to your downloads folder. Higher qualities can take a minute.";
-            if (typeof dlg.showModal === "function") dlg.showModal();
+            try {
+                const open = globalThis.__resuma?.showModal?.("media-dl");
+                if (open && typeof open.then === "function") await open;
+                else if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+            } catch (_) {
+                if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+            }
             try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
         }
         const a = document.createElement("a");
@@ -399,7 +427,36 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
     const sourcePayload = (ws) => {
         const el = ws.querySelector("#ytt-source");
-        try { return JSON.parse(el?.textContent || "{}"); } catch (_) { return {}; }
+        try {
+            const src = JSON.parse(el?.textContent || "{}");
+            if (Array.isArray(src.cues) && src.cues.length) return src;
+        } catch (_) {}
+        return wsData(ws);
+    };
+    const TRANSLATE_CHUNK = 45;
+    const translateCues = async (ws, vid, sl, tlang, cues, applyBtn) => {
+        const out = [];
+        const total = cues.length;
+        for (let i = 0; i < total; i += TRANSLATE_CHUNK) {
+            const chunk = cues.slice(i, i + TRANSLATE_CHUNK);
+            const done = Math.min(i + chunk.length, total);
+            setBtnBusy(applyBtn, true, total > TRANSLATE_CHUNK ? `Translating… ${done}/${total}` : "Translating…");
+            setStatus(ws, total > TRANSLATE_CHUNK
+                ? `Translating captions… ${done} of ${total}`
+                : "Translating captions…", true);
+            const res = await fetch("/api/translate", {
+                method: "POST",
+                headers: { Accept: "application/json", "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ video_id: vid, lang: sl, tlang, cues: chunk }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error || !Array.isArray(data.cues) || data.cues.length !== chunk.length) {
+                throw new Error(data.error || "Could not translate those captions. Try Apply again in a minute.");
+            }
+            out.push(...data.cues);
+        }
+        return out;
     };
     const paintCues = (ws, payload) => {
         const el = ws.querySelector("#ytt-data");
@@ -481,9 +538,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         if (!vid) return;
         const href = langHref(ws);
         const applyBtn = ws.querySelector("[data-apply]");
-        if (applyBtn) applyBtn.disabled = true;
+        if (applyBtn?.getAttribute("aria-busy") === "true") return;
         const prevLang = ws.dataset.lang || "";
         const langChanged = Boolean(lang) && lang !== prevLang;
+        setBtnBusy(applyBtn, true, langChanged ? "Loading…" : (tlang ? "Translating…" : "Applying…"));
         try {
             if (langChanged) {
                 setStatus(ws, "Loading captions…", true);
@@ -537,20 +595,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 setStatus(ws, "Load captions first, then translate.");
                 return;
             }
-            setStatus(ws, "Translating captions…", true);
-            const sl = (lang.split(/[:|]/)[0] || "autodetect").split("-")[0] || "autodetect";
-            const res = await fetch("/api/translate", {
-                method: "POST",
-                headers: { Accept: "application/json", "Content-Type": "application/json" },
-                credentials: "same-origin",
-                body: JSON.stringify({ video_id: vid, lang: sl, tlang, cues }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || data.error || !Array.isArray(data.cues) || data.cues.length !== cues.length) {
-                setStatus(ws, data.error || "Could not translate those captions. Try Apply again in a minute.");
-                return;
-            }
-            const next = data.cues;
+            const sl = (lang.split(/[:|]/)[0] || "auto").split("-")[0] || "auto";
+            const next = await translateCues(ws, vid, sl, tlang, cues, applyBtn);
             paintCues(ws, {
                 video_id: src.video_id || vid,
                 title: src.title || "",
@@ -561,13 +607,11 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             paintMode(ws, "translate");
             applyFilters(ws);
             setStatus(ws, "Translated captions are on the page.");
-        } catch (_) {
-            setStatus(ws, "Could not update captions.");
+        } catch (err) {
+            const msg = err && err.message ? String(err.message) : "Could not update captions.";
+            setStatus(ws, msg);
         } finally {
-            if (applyBtn) {
-                applyBtn.disabled = false;
-                applyBtn.textContent = "Apply";
-            }
+            setBtnBusy(applyBtn, false);
         }
     };
     const root = liveWorkspace();
@@ -917,6 +961,12 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         }
         if (err) err.hidden = true;
                 F.go("/?v=" + encodeURIComponent(id) + "&mode=" + encodeURIComponent(ws.dataset.mode || "text"));
+                const goBtn = form.querySelector('button[type="submit"]');
+                if (goBtn) {
+                    goBtn.disabled = true;
+                    goBtn.setAttribute("aria-busy", "true");
+                    goBtn.classList.add("is-busy");
+                }
             }
         });
         document.addEventListener("input", (e) => {
@@ -1018,14 +1068,14 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                             <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download video"</a>
                         </div>
                     </div>
-                    <dialog class="dl-dialog" data-dl-dlg="" data-video-dlg="" closedby="any" aria-labelledby="ytt-vdl-title">
+                    <Modal id="media-dl" closedBy="any" class="dl-dialog">
                         <h2 id="ytt-vdl-title" data-dl-title="">"Your file is downloading"</h2>
                         <p data-dl-lead="">"The file will save to your downloads folder."</p>
                         {crate::ads::slot("workspace-video-dl", "rectangle")}
                         <form method="dialog">
                             <button type="submit" class="btn btn-primary">"Got it"</button>
                         </form>
-                    </dialog>
+                    </Modal>
                     {View::raw(chapters_html)}
                     {crate::ads::slot("workspace-player", "infeed")}
                     <form class="another-form" data-another="">
@@ -1047,7 +1097,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                                     spellcheck="false"
                                     placeholder="Paste another YouTube link"
                                 />
-                                <button type="submit" class="btn btn-secondary">"Go"</button>
+                                <button type="submit" class="btn btn-secondary">
+                                    <span class="btn-spinner" aria-hidden="true"></span>
+                                    <span>"Go"</span>
+                                </button>
                             </span>
                         </label>
                         <p class="hint form-error" data-another-error="" hidden="" role="alert"></p>
@@ -1066,7 +1119,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         "Translate"
                         <select name="tlang" data-tlang-select="">{tlang_options}</select>
                     </label>
-                    <button type="button" class="btn btn-primary" data-apply="">"Apply"</button>
+                    <button type="button" class="btn btn-primary" data-apply="">
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        <span data-apply-label="">"Apply"</span>
+                    </button>
                     <p class="hint apply-status" data-apply-status="" hidden="" role="status" aria-live="polite"></p>
                 </form>
                 <div class="toolbar">

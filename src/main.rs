@@ -85,6 +85,17 @@ fn RootLayout() -> View {
             };
             document.addEventListener("resuma:navigate", onNav);
             document.addEventListener("click", onClick, true);
+            if (!window.__yttVtGuard) {
+                window.__yttVtGuard = true;
+                window.addEventListener("unhandledrejection", (e) => {
+                    const err = e.reason;
+                    const name = err && err.name;
+                    const msg = err && (err.message || String(err)) || "";
+                    if (name === "AbortError" && /Transition was skipped|ViewTransition/i.test(msg)) {
+                        e.preventDefault();
+                    }
+                });
+            }
             if (!window.__yttCopyBound) {
                 window.__yttCopyBound = true;
                 const clock = (ms) => {
@@ -210,9 +221,6 @@ const HEAD: &str = r##"
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
-<meta property="og:title" content="YouTube transcript, audio, SRT and translation | YouTubeForge" />
-<meta property="og:description" content="Paste a YouTube link. Get a searchable transcript. Copy, download SRT, translate, or save audio. No account." />
-<meta property="og:type" content="website" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 "##;
 
@@ -290,10 +298,9 @@ fn seo_kit() -> SeoKit {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let kit = seo_kit();
-    let head = format!("{HEAD}{}{}", kit.head_extras(), ads::head_snippet());
-    let json_ld = serde_json::to_string(&kit.json_ld_blocks).unwrap_or_else(|_| "[]".into());
-    let llms: &'static [u8] = Box::leak(kit.llms_txt().into_bytes().into_boxed_slice());
+    // `with_seo_kit` owns keywords/author/theme-color meta, JSON-LD, and the
+    // `/robots.txt` + `/llms.txt` routes (AI crawler policy included).
+    let head = format!("{HEAD}{}", ads::head_snippet());
     let ads_txt = ads::ads_txt().map(|s| -> &'static [u8] {
         Box::leak(s.into_bytes().into_boxed_slice())
     });
@@ -309,10 +316,9 @@ async fn main() -> std::io::Result<()> {
         )
         .with_site_url("https://youtubetotext.fly.dev")
         .with_og_image("/og.svg")
-        .with_json_ld(json_ld)
         .with_head(head)
-        .with_stylesheet("/css/youtubetotext.css")
-        .static_asset("/llms.txt", llms, "text/plain; charset=utf-8");
+        .with_seo_kit(seo_kit())
+        .with_stylesheet("/css/youtubetotext.css");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
