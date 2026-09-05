@@ -101,17 +101,20 @@ fn render_landing(mode: Mode, landing: crate::family::Landing, es: bool) -> View
 
     view! {
         <main class="home-page landing-page" lang={if es { "es" } else { "en" }}>
-            <section class="hero">
-                <div class="hero-copy">
-                    <p class="eyebrow">{landing.eyebrow}</p>
-                    <h1>{landing.h1}</h1>
-                    <p class="hero-lead">{landing.lead}</p>
-                    <p class="hint">
-                        <NavLink href={alt_href}>{alt_label}</NavLink>
-                    </p>
-                    {home_search(mode)}
-                </div>
-            </section>
+            <div class="hero-wrap">
+                <div class="hero-particles" data-hero-particles="" aria-hidden="true"></div>
+                <section class="hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow">{landing.eyebrow}</p>
+                        <h1>{landing.h1}</h1>
+                        <p class="hero-lead">{landing.lead}</p>
+                        <p class="hint">
+                            <NavLink href={alt_href}>{alt_label}</NavLink>
+                        </p>
+                        {home_search(mode)}
+                    </div>
+                </section>
+            </div>
 
             <section class="howto" aria-labelledby="howto-title">
                 <h2 id="howto-title">{landing.howto_title}</h2>
