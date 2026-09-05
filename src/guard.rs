@@ -22,36 +22,78 @@ static BUCKETS: Lazy<Mutex<HashMap<String, Vec<Instant>>>> =
 pub struct Limit {
     pub bucket: &'static str,
     pub max: usize,
+    pub pro: usize,
 }
 
 pub const PAGE: Limit = Limit {
     bucket: "page",
     max: 40,
+    pro: 40,
 };
 pub const API: Limit = Limit {
     bucket: "api",
     max: 24,
+    pro: 240,
 };
 pub const AUDIO: Limit = Limit {
     bucket: "audio",
     max: 10,
+    pro: 80,
 };
 pub const VIDEO: Limit = Limit {
     bucket: "video",
     max: 6,
+    pro: 40,
 };
 pub const TRANSLATE: Limit = Limit {
     bucket: "translate",
     max: 200,
+    pro: 800,
 };
 pub const INGEST: Limit = Limit {
     bucket: "ingest",
     max: 12,
+    pro: 60,
 };
 
+pub fn configured_api_keys() -> Vec<String> {
+    std::env::var("FORGE_API_KEYS")
+        .ok()
+        .or_else(|| std::env::var("API_KEY").ok())
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| s.len() >= 16)
+        .collect()
+}
+
+pub fn api_key_from_headers(headers: &HeaderMap) -> Option<String> {
+    header_str(headers, "x-api-key")
+        .or_else(|| {
+            header_str(headers, "authorization").and_then(|v| {
+                let v = v.trim();
+                v.strip_prefix("Bearer ")
+                    .or_else(|| v.strip_prefix("bearer "))
+                    .map(|s| s.trim().to_string())
+            })
+        })
+        .filter(|s| !s.is_empty())
+}
+
+pub fn is_pro_headers(headers: &HeaderMap) -> bool {
+    let Some(provided) = api_key_from_headers(headers) else {
+        return false;
+    };
+    configured_api_keys().iter().any(|k| k == &provided)
+}
+
 pub fn allow(ip: &str, limit: Limit) -> bool {
+    allow_n(ip, limit.bucket, limit.max)
+}
+
+fn allow_n(ip: &str, bucket: &str, max: usize) -> bool {
     let now = Instant::now();
-    let key = format!("{}|{ip}", limit.bucket);
+    let key = format!("{bucket}|{ip}");
     let mut map = BUCKETS.lock();
     if map.len() >= MAX_KEYS {
         map.retain(|_, hits| hits.last().is_some_and(|t| now.duration_since(*t) < WINDOW));
@@ -61,7 +103,7 @@ pub fn allow(ip: &str, limit: Limit) -> bool {
     }
     let hits = map.entry(key).or_default();
     hits.retain(|t| now.duration_since(*t) < WINDOW);
-    if hits.len() >= limit.max {
+    if hits.len() >= max {
         return false;
     }
     hits.push(now);
@@ -103,7 +145,12 @@ pub fn check_req(req: &FlowRequest, limit: Limit) -> Result<(), String> {
 }
 
 pub fn check_headers(headers: &HeaderMap, limit: Limit) -> Result<(), String> {
-    if allow(&client_ip_from_headers(headers), limit) {
+    let max = if is_pro_headers(headers) {
+        limit.pro
+    } else {
+        limit.max
+    };
+    if allow_n(&client_ip_from_headers(headers), limit.bucket, max) {
         Ok(())
     } else {
         Err(busy_message())
@@ -188,6 +235,7 @@ mod tests {
         let lim = Limit {
             bucket: "test",
             max: 3,
+            pro: 3,
         };
         assert!(allow(&ip, lim));
         assert!(allow(&ip, lim));

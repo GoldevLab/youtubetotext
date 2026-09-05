@@ -1,6 +1,6 @@
 use resuma::prelude::*;
 
-use crate::family::{app_href, Mode};
+use crate::family::{app_href, canonical_url, Mode};
 use crate::parse::parse_video_id;
 use crate::tool::home_search;
 use crate::workspace::workspace;
@@ -30,6 +30,7 @@ fn idle() -> View {
     set_page_description(
         "Paste a YouTube link. Get a searchable transcript, then download audio, translate captions, summarize, or export SRT. Free, no account.",
     );
+    set_page_canonical(canonical_url("/"));
     view! {
         <main class="home-page">
             <div class="hero-wrap">
@@ -45,23 +46,71 @@ fn idle() -> View {
                     </div>
                 </section>
             </div>
-            {crate::ads::slot("home-hero", "infeed")}
             <section class="howto" aria-labelledby="howto-title">
                 <h2 id="howto-title">"How it works"</h2>
                 <ol class="howto-grid">
                     <li>
                         <h3>"Paste the link"</h3>
-                        <p>"A watch URL, Shorts, youtu.be, or the video id. No account."</p>
+                        <p>"A watch URL, Shorts, youtu.be, or the video id. No account. We read YouTube’s public caption tracks — we do not invent speech from the audio."</p>
                     </li>
                     <li>
                         <h3>"Read and export"</h3>
-                        <p>"Search lines, skip intros, copy the text, or download TXT, SRT, VTT, or Markdown."</p>
+                        <p>"Search lines, skip intros, copy the text, or download TXT, SRT, VTT, or Markdown. MP3 is the default audio download."</p>
                     </li>
                     <li>
                         <h3>"Stay on this video"</h3>
-                        <p>"Audio, translation, a recap, and SRT are on the same result."</p>
+                        <p>"The result URL uses ?v= and mode=text (not indexed). Audio, translation, a recap, and SRT stay on that same page."</p>
                     </li>
                 </ol>
+            </section>
+            <section class="features" aria-labelledby="jobs-title">
+                <h2 id="jobs-title">"Pick the job Google sent you for"</h2>
+                <p class="hint">
+                    "Each landing is a different task. The box on this page is the same tool."
+                </p>
+                <ul class="feature-grid">
+                    <li>
+                        <h3><NavLink href="/youtube-to-text">"YouTube to text"</NavLink></h3>
+                        <p>"Searchable transcript from public captions. Quotes, notes, timestamps."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/youtube-to-audio">"YouTube to MP3"</NavLink></h3>
+                        <p>"Soundtrack only. MP3 by default, or M4A, Opus, WAV."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/youtube-translator">"Translate captions"</NavLink></h3>
+                        <p>"YouTube tlang keeps cue times. Not a paragraph dump into a chat."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/youtube-summary">"Chapter summary"</NavLink></h3>
+                        <p>"Extractive recap from the captions, plus a prompt for your own model."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/youtube-to-srt">"SRT / VTT"</NavLink></h3>
+                        <p>"Timed subtitle files for VLC, editors, and HTML5 tracks."</p>
+                    </li>
+                </ul>
+            </section>
+            <section class="faq" aria-labelledby="faq-title">
+                <h2 id="faq-title">"FAQ"</h2>
+                <div class="faq-list">
+                    <details>
+                        <summary>"Is YouTubeForge free to use?"</summary>
+                        <p>"Yes. No account, no sign-up. Public YouTube captions are extracted as-is. Ads may appear around the tool."</p>
+                    </details>
+                    <details>
+                        <summary>"How do I access the transcript after generating it?"</summary>
+                        <p>"Every result lives on the home URL with v= and mode=text. Optional query params: lang, tlang, and mode (audio, translate, summary, srt). Those URLs are noindex."</p>
+                    </details>
+                    <details>
+                        <summary>"Can I download the transcript?"</summary>
+                        <p>"Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON. Copy and Copy Markdown are also available."</p>
+                    </details>
+                    <details>
+                        <summary>"Is there a limit to the length of the video?"</summary>
+                        <p>"If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."</p>
+                    </details>
+                </div>
             </section>
             {crate::ads::slot("home-faq", "infeed")}
             {crate::cross_sell::sister_apps()}
@@ -85,7 +134,6 @@ fn transcript_workspace(req: FlowRequest, video_id: String, mode: Mode) -> View 
             move |res| match res {
                 Ok(doc) => view! {
                     <main class="workspace-main">
-                        {crate::ads::slot("workspace-top", "infeed")}
                         {workspace(doc, lang_ok, tlang_ok, mode_ok)}
                     </main>
                 },
@@ -107,7 +155,6 @@ fn pending() -> View {
             <p class="eyebrow">"Working"</p>
             <h1>"Talking to YouTube…"</h1>
             <p class="hero-lead">"This usually takes a second."</p>
-            {crate::ads::slot("workspace-loading", "infeed")}
         </main>
     }
 }
@@ -118,7 +165,6 @@ fn fail_view(message: String, retry: String, vid: String) -> View {
         <main class="content-section">
             <h1>"Could not load that transcript"</h1>
             <p class="hero-lead">{message}</p>
-            {crate::ads::slot("error-mid", "infeed")}
             <p class="error-actions">
                 <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
                 <NavLink href="/" class="btn btn-ghost">"Another link"</NavLink>

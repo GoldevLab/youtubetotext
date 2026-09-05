@@ -1,5 +1,75 @@
 use resuma::prelude::*;
 
+use crate::family::Mode;
+
+pub fn related(current: Mode) -> View {
+    let cards = Mode::all()
+        .into_iter()
+        .filter(|m| *m != current)
+        .map(|m| {
+            let href = m.landing_path().to_string();
+            let label = match m {
+                Mode::Text => "YouTube to text",
+                Mode::Audio => "YouTube to MP3",
+                Mode::Translate => "Translate captions",
+                Mode::Summary => "Chapter summary",
+                Mode::Srt => "Download SRT / VTT",
+            };
+            let hint = match m {
+                Mode::Text => "Searchable transcript from public captions.",
+                Mode::Audio => "Save the soundtrack, then stay on the same video.",
+                Mode::Translate => "Keep timestamps. YouTube tlang, not a chat paste.",
+                Mode::Summary => "Extractive recap plus a prompt for your own model.",
+                Mode::Srt => "Timed subtitle files for players and editors.",
+            };
+            view! {
+                <li>
+                    <a href={href} class="related-card" data-r-nav="true">
+                        <strong>{label}</strong>
+                        <span>{hint}</span>
+                    </a>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! {
+        <nav class="cross-sell" aria-label="Related YouTube tools">
+            <h2>"Other YouTubeForge tools"</h2>
+            <p class="hint">
+                "Same paste box. Different job. Transcript, audio, translation, summary, and SRT each have their own page so search can find them."
+            </p>
+            <ul class="related-grid">{cards}</ul>
+        </nav>
+    }
+}
+
+pub fn seo_footer_links() -> View {
+    view! {
+        <nav class="seo-links" aria-label="YouTubeForge tools">
+            <NavLink href="/youtube-to-text">"Transcript"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-to-audio">"Audio / MP3"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-translator">"Translate"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-summary">"Summary"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-to-srt">"SRT"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-a-texto">"ES"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/privacy">"Privacy"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/terms">"Terms"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/pricing">"API"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/extension">"Extension"</NavLink>
+        </nav>
+    }
+}
+
 /// Sister products (same pattern as YouTubeToTranscript’s footer apps).
 pub fn sister_apps() -> View {
     let cards = [

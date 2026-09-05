@@ -8,7 +8,9 @@ mod export;
 mod family;
 mod guard;
 mod landing;
+mod landing_es;
 mod langs;
+mod site;
 mod pages;
 mod parse;
 mod summary;
@@ -58,19 +60,14 @@ fn chrome(body: View) -> View {
                 </div>
             </header>
             {with_view_transition(vt, vec![Child::View(body)])}
-            <div class="ad-rail">
-                {crate::ads::slot("footer", "leaderboard")}
-            </div>
             <footer class="site-footer">
+                {crate::cross_sell::seo_footer_links()}
                 {crate::cross_sell::sister_apps_links()}
                 <p>
                     <strong>"YouTubeForge"</strong>
                     " — YouTube transcripts, audio, translation, summaries, and SRT. Not affiliated with YouTube or Google."
                 </p>
             </footer>
-            <div class="ad-rail ad-rail-end">
-                {crate::ads::slot("anchor", "leaderboard")}
-            </div>
         </div>
     }
 }
@@ -219,7 +216,6 @@ fn not_found() -> View {
         <main class="content-section">
             <h1>"Page not found"</h1>
             <p class="hero-lead">"That page does not exist on YouTubeForge."</p>
-            {crate::ads::slot("notfound-mid", "infeed")}
             <p>
                 <NavLink href="/" class="btn btn-primary">"Back to home"</NavLink>
             </p>
@@ -235,10 +231,6 @@ struct LegacyVidQuery {
     lang: String,
     #[serde(default)]
     tlang: String,
-}
-
-async fn redirect_home() -> Redirect {
-    Redirect::permanent("/")
 }
 
 async fn redirect_app_youtube(uri: Uri) -> Redirect {
@@ -275,7 +267,8 @@ const HEAD: &str = r##"
 "##;
 
 fn seo_kit() -> SeoKit {
-    let mut kit = SeoKit::new("YouTubeForge", "https://youtubetotext.fly.dev")
+    let origin = crate::family::public_origin();
+    let mut kit = SeoKit::new("YouTubeForge", &origin)
         .with_locale("en_US")
         .with_keywords(
             "YouTube transcript, YouTube to text, download YouTube captions, \
@@ -328,10 +321,16 @@ fn seo_kit() -> SeoKit {
         }));
     kit.theme_color = Some("#14090a".into());
     kit.author = "YouTubeForge".into();
-    kit.llms_sections = vec![(
-        "How to use".into(),
-        "Open / and paste a YouTube URL, or open /?v={videoId}&mode=text. Optional query: lang, tlang, mode.".into(),
-    )];
+    kit.llms_sections = vec![
+        (
+            "How to use".into(),
+            "Open / and paste a YouTube URL. The result is /?v={videoId}&mode=text (noindex). Optional query: lang, tlang, mode.".into(),
+        ),
+        (
+            "SEO landings".into(),
+            "/youtube-to-text and Spanish /youtube-a-texto (audio, traductor, resumen, srt). /privacy /terms /pricing /api /extension.".into(),
+        ),
+    ];
     kit.ai.disallow = vec!["/api/".into()];
     kit
 }
@@ -340,7 +339,7 @@ fn seo_kit() -> SeoKit {
 async fn main() -> std::io::Result<()> {
     // `with_seo_kit` owns keywords/author/theme-color meta, JSON-LD, and the
     // `/robots.txt` + `/llms.txt` routes (AI crawler policy included).
-    let head = format!("{HEAD}{}", ads::head_snippet());
+    let head = format!("{HEAD}{}{}", ads::head_snippet(), crate::site::head_extras());
     let ads_txt = ads::ads_txt().map(|s| -> &'static [u8] {
         Box::leak(s.into_bytes().into_boxed_slice())
     });
@@ -354,7 +353,7 @@ async fn main() -> std::io::Result<()> {
         .with_description(
             "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
         )
-        .with_site_url("https://youtubetotext.fly.dev")
+        .with_site_url(crate::family::public_origin())
         .with_og_image("/og.svg")
         .with_head(head)
         .with_seo_kit(seo_kit())
@@ -377,7 +376,7 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-6".into(),
+            cache_version: "yf-8".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
@@ -396,14 +395,7 @@ async fn main() -> std::io::Result<()> {
             offline_message: "YouTubeForge needs a connection to fetch captions and downloads. Reconnect and try again.".into(),
             manifest_icons: Vec::new(),
         })
-        .route("/youtube-to-text", get(redirect_home))
-        .route("/youtube-to-audio", get(redirect_home))
-        .route("/youtube-translator", get(redirect_home))
-        .route("/youtube-summary", get(redirect_home))
-        .route("/youtube-to-srt", get(redirect_home))
         .route("/app/youtube", get(redirect_app_youtube))
-        .route("/extension", get(redirect_home))
-        .route("/api", get(redirect_home))
         .route("/v/{id}", get(redirect_video))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
