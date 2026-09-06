@@ -1,6 +1,6 @@
 //! Chapter-aware extractive recap from caption cues.
 
-use crate::youtube::{Chapter, Cue, TranscriptDoc};
+use crate::youtube::{Cue, TranscriptDoc};
 
 pub fn extractive_summary(doc: &TranscriptDoc) -> String {
     if doc.cues.is_empty() {
@@ -74,7 +74,7 @@ fn first_sentences(text: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::youtube::{CaptionTrack, Cue, TranscriptDoc};
+    use crate::youtube::{CaptionTrack, Chapter, Cue, TranscriptDoc};
 
     fn doc(cues: Vec<Cue>, chapters: Vec<Chapter>) -> TranscriptDoc {
         TranscriptDoc {

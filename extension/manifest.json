@@ -1,17 +1,16 @@
 {
   "manifest_version": 3,
   "name": "YouTubeForge",
-  "version": "0.1.0",
-  "description": "Get a YouTube transcript: searchable, downloadable SRT/VTT.",
+  "version": "1.0.0",
+  "description": "Get a searchable YouTube transcript and open it on YouTubeForge. Free, no account.",
+  "homepage_url": "https://youtubetotext.fly.dev/extension",
   "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
     "https://m.youtube.com/*",
     "https://www.youtube-nocookie.com/*",
-    "https://youtubetotext.fly.dev/*",
-    "http://127.0.0.1/*",
-    "http://localhost/*"
+    "https://youtubetotext.fly.dev/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -19,14 +18,17 @@
   },
   "action": {
     "default_title": "Get YouTube transcript",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
-      "48": "icon48.png"
+      "48": "icon48.png",
+      "128": "icon128.png"
     }
   },
   "icons": {
     "16": "icon16.png",
-    "48": "icon48.png"
+    "48": "icon48.png",
+    "128": "icon128.png"
   },
   "content_scripts": [
     {
@@ -40,11 +42,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": [
-        "https://youtubetotext.fly.dev/*",
-        "http://127.0.0.1/*",
-        "http://localhost/*"
-      ],
+      "matches": ["https://youtubetotext.fly.dev/*"],
       "js": ["site.js"],
       "run_at": "document_idle"
     }

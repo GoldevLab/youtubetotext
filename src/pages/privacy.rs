@@ -72,6 +72,10 @@ pub fn page(_req: FlowRequest) -> View {
                 <a href="/ads.txt">"/ads.txt"</a>
                 " when a publisher id is configured."
             </p>
+            <h2>"Browser extension"</h2>
+            <p>
+                "The optional Chrome extension can fetch captions in your browser and open the result on this website. It does not show Google AdSense inside the popup. Ads stay on these pages."
+            </p>
 
             <h2>"Analytics"</h2>
             <p>

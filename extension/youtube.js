@@ -1,3 +1,11 @@
+function siteOrigin() {
+  try {
+    return new URL(chrome.runtime.getManifest().homepage_url).origin;
+  } catch {
+    return "https://youtubetotext.fly.dev";
+  }
+}
+
 function videoIdFromLocation() {
   try {
     const u = new URL(location.href);
@@ -35,22 +43,17 @@ function mount() {
           setTimeout(() => { btn.textContent = "Get transcript"; }, 2400);
           return;
         }
-        const origins = ["http://127.0.0.1:3010", "https://youtubetotext.fly.dev"];
-        let dest = `https://youtubetotext.fly.dev/?v=${id}&mode=text`;
-        for (const origin of origins) {
-          try {
-            const r = await fetch(`${origin}/api/ingest`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(res.doc),
-            });
-            if (r.ok) {
-              dest = `${origin}/?v=${id}&mode=text`;
-              break;
-            }
-          } catch {
-            /* next */
-          }
+        const origin = siteOrigin();
+        let dest = `${origin}/?v=${id}&mode=text`;
+        try {
+          const r = await fetch(`${origin}/api/ingest`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(res.doc),
+          });
+          if (r.ok) dest = `${origin}/?v=${id}&mode=text`;
+        } catch {
+          /* still open the site */
         }
         window.open(dest, "_blank", "noopener,noreferrer");
       });

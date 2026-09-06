@@ -1,0 +1,14 @@
+Name: YouTubeForge
+Short (≤132): Get a searchable YouTube transcript. Opens YouTubeForge. Free, no account.
+Category: Productivity
+
+Single purpose: On a YouTube watch page, fetch public captions in this browser and open the transcript on YouTubeForge.
+
+Privacy: https://youtubetotext.fly.dev/privacy
+Support: https://youtubetotext.fly.dev/extension
+
+Permission justification:
+- activeTab / youtube.com: read the video id and fetch public captions the tab can already see
+- youtubetotext.fly.dev: POST /api/ingest then open /?v=
+
+Do not put AdSense in the extension. Ads are only on the website.

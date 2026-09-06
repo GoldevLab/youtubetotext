@@ -37,12 +37,21 @@ fn view_transition_name(path: &str) -> String {
     }
 }
 
-fn chrome(body: View) -> View {
+fn chrome(body: View, ads: bool) -> View {
     let vt = view_transition_name(
         &current_request()
             .map(|r| r.path)
             .unwrap_or_else(|| "/".into()),
     );
+    let footer_ad = if ads {
+        view! {
+            <div class="ad-rail ad-rail-end">
+                {crate::ads::slot("footer", "leaderboard")}
+            </div>
+        }
+    } else {
+        view! { <div hidden=""></div> }
+    };
     view! {
         <div class="app">
             <div class="liquid-orbs" aria-hidden="true">
@@ -60,6 +69,7 @@ fn chrome(body: View) -> View {
                 </div>
             </header>
             {with_view_transition(vt, vec![Child::View(body)])}
+            {footer_ad}
             <footer class="site-footer">
                 {crate::cross_sell::seo_footer_links()}
                 {crate::cross_sell::sister_apps_links()}
@@ -208,7 +218,7 @@ fn RootLayout() -> View {
     "##
     );
 
-    chrome(view! { <Slot /> })
+    chrome(view! { <Slot /> }, true)
 }
 
 fn not_found() -> View {
@@ -220,7 +230,7 @@ fn not_found() -> View {
                 <NavLink href="/" class="btn btn-primary">"Back to home"</NavLink>
             </p>
         </main>
-    })
+    }, false)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -259,10 +269,13 @@ async fn redirect_video(Path(id): Path<String>, Query(q): Query<LegacyVidQuery>)
 }
 
 const HEAD: &str = r##"
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <script type="module" src="/js/youtubetotext.js?v=2"></script>
 "##;
 
@@ -343,6 +356,7 @@ async fn main() -> std::io::Result<()> {
     let ads_txt = ads::ads_txt().map(|s| -> &'static [u8] {
         Box::leak(s.into_bytes().into_boxed_slice())
     });
+    const ICON: &[u8] = include_bytes!("icon.svg");
     let public = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("public");
 
     let mut serve = FlowServeOptions::default();
@@ -354,7 +368,7 @@ async fn main() -> std::io::Result<()> {
             "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
         )
         .with_site_url(crate::family::public_origin())
-        .with_og_image("/og.svg")
+        .with_og_image("/og.png")
         .with_head(head)
         .with_seo_kit(seo_kit())
         .with_html_theme(
@@ -363,7 +377,8 @@ async fn main() -> std::io::Result<()> {
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css");
+        .with_stylesheet("/css/youtubetotext.css?v=r1")
+        .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
@@ -376,15 +391,19 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-10".into(),
+            cache_version: "yf-11".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("Y".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css".into(),
+                "/css/youtubetotext.css?v=r1".into(),
                 "/js/youtubetotext.js?v=2".into(),
+                "/icon.svg".into(),
+                "/icons/icon-192.png".into(),
+                "/icons/icon-512.png".into(),
+                "/icons/apple-touch-icon.png".into(),
             ],
             shortcuts: vec![PwaShortcut {
                 name: "New transcript".into(),

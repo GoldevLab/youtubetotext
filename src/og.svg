@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="YouTubeForge">
+  <rect width="1200" height="630" fill="#14090a"/>
+  <rect x="72" y="72" width="88" height="88" rx="18" fill="#8c1515"/>
+  <path d="M102 96v40l36-20z" fill="#fff4f2"/>
+  <text x="188" y="136" fill="#fff4f2" font-family="system-ui,Segoe UI,sans-serif" font-size="56" font-weight="700">YouTubeForge</text>
+  <text x="72" y="280" fill="#fff4f2" font-family="system-ui,Segoe UI,sans-serif" font-size="48" font-weight="700">YouTube transcript, SRT, audio</text>
+  <text x="72" y="360" fill="#e0c4c0" font-family="system-ui,Segoe UI,sans-serif" font-size="32">Paste a URL. Copy, download, translate. No account.</text>
+</svg>
