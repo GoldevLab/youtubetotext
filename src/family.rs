@@ -95,7 +95,7 @@ pub fn public_origin() -> String {
         .ok()
         .map(|s| s.trim().trim_end_matches('/').to_string())
         .filter(|s| s.starts_with("http://") || s.starts_with("https://"))
-        .unwrap_or_else(|| "https://youtubetotext.fly.dev".into())
+        .unwrap_or_else(|| "https://forgeyt.com".into())
 }
 
 pub fn canonical_url(path: &str) -> String {

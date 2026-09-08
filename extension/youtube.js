@@ -2,7 +2,7 @@ function siteOrigin() {
   try {
     return new URL(chrome.runtime.getManifest().homepage_url).origin;
   } catch {
-    return "https://youtubetotext.fly.dev";
+    return "https://forgeyt.com";
   }
 }
 

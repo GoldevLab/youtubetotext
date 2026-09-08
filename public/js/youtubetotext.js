@@ -150,4 +150,123 @@
     tryHero();
   }
   document.addEventListener("resuma:navigate", () => requestAnimationFrame(tryHero));
+
+  const parseYouTubeId = (raw) => {
+    const s = String(raw || "").trim();
+    if (/^[\w-]{11}$/.test(s)) return s;
+    try {
+      const u = new URL(s.startsWith("http") ? s : "https://" + s);
+      const v = u.searchParams.get("v") || u.searchParams.get("vi");
+      if (v && /^[\w-]{11}$/.test(v)) return v;
+      const parts = u.pathname.split("/").filter(Boolean);
+      const host = u.hostname.replace(/^www\./, "");
+      if (host === "youtu.be" && /^[\w-]{11}$/.test(parts[0] || "")) return parts[0];
+      const i = parts.findIndex((p) => ["embed", "shorts", "live", "v", "watch"].includes(p));
+      const id = i >= 0 ? (parts[i + 1] || "").slice(0, 11) : "";
+      if (/^[\w-]{11}$/.test(id)) return id;
+    } catch (_) {}
+    return null;
+  };
+
+  const armDlDialog = (dlg) => {
+    if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
+    dlg.dataset.ready = "1";
+    if (!("closedBy" in HTMLDialogElement.prototype)) {
+      dlg.addEventListener("click", (event) => {
+        if (event.target !== dlg) return;
+        const rect = dlg.getBoundingClientRect();
+        const inside =
+          rect.top <= event.clientY &&
+          event.clientY <= rect.top + rect.height &&
+          rect.left <= event.clientX &&
+          event.clientX <= rect.left + rect.width;
+        if (!inside) dlg.close();
+      });
+    }
+  };
+
+  const showDlDialog = async (root, kind) => {
+    const dlg = root?.querySelector("#r-modal-media-dl") || root?.querySelector(".dl-dialog");
+    armDlDialog(dlg);
+    if (!(dlg instanceof HTMLDialogElement)) return;
+    const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
+    const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
+    if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
+    if (lead) {
+      lead.textContent =
+        kind === "audio"
+          ? "The file will save to your downloads folder. MP3 conversion can take a moment."
+          : "The file will save to your downloads folder. Higher qualities can take a minute.";
+    }
+    try {
+      const open = globalThis.__resuma?.showModal?.("media-dl");
+      if (open && typeof open.then === "function") await open;
+      else if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+    } catch (_) {
+      if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+    }
+    try {
+      globalThis.__yttFillAds?.(dlg);
+    } catch (_) {}
+  };
+
+  /** Keep the page; never navigate to bare /api/video. */
+  const startIframeDownload = (href) => {
+    if (!href || !/[?&]v=/.test(href)) return false;
+    const frame = document.createElement("iframe");
+    frame.hidden = true;
+    frame.setAttribute("aria-hidden", "true");
+    frame.src = href;
+    document.body.append(frame);
+    setTimeout(() => frame.remove(), 180000);
+    return true;
+  };
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (!t?.closest) return;
+
+      const failAudio = t.closest("[data-fail-audio]");
+      if (failAudio) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = failAudio.getAttribute("data-vid") || "";
+        if (!/^[\w-]{11}$/.test(id)) return;
+        startIframeDownload(`/api/audio?v=${encodeURIComponent(id)}&fmt=mp3`);
+        return;
+      }
+
+      const videoBtn = t.closest("[data-home-video]");
+      const audioBtn = t.closest("[data-home-audio]");
+      if (!videoBtn && !audioBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const root = document.getElementById("ytt-home") || t.closest("#ytt-home");
+      const input = root?.querySelector('input[name="url"]');
+      const err = root?.querySelector("[data-form-error]");
+      const id = parseYouTubeId(input?.value);
+      if (!id) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = "Paste a YouTube link first.";
+        }
+        input?.setAttribute("aria-invalid", "true");
+        input?.focus();
+        return;
+      }
+      if (err) err.hidden = true;
+      input?.removeAttribute("aria-invalid");
+      const q = root?.querySelector("[data-vq]")?.value || "720";
+      const afmt = root?.querySelector("[data-afmt]")?.value || "mp3";
+      const kind = videoBtn ? "video" : "audio";
+      const href = videoBtn
+        ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`
+        : `/api/audio?v=${encodeURIComponent(id)}&fmt=${encodeURIComponent(afmt)}`;
+      void showDlDialog(root, kind);
+      startIframeDownload(href);
+    },
+    true,
+  );
 })();

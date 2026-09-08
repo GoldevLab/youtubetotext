@@ -3,7 +3,7 @@
 use axum::body::Body;
 use axum::extract::Query;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::Json;
 use serde::Deserialize;
 
@@ -119,11 +119,7 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
         .trim()
         .to_string();
     let Some(id) = parse_video_id(&raw) else {
-        return json_error(
-            StatusCode::BAD_REQUEST,
-            "Pass v=VIDEO_ID or a YouTube url=…",
-        )
-        .into_response();
+        return missing_media_id(&headers);
     };
     let fmt = normalize_audio_format(q.fmt.as_deref());
     match download_audio(&id, fmt).await {
@@ -173,11 +169,7 @@ pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
         .trim()
         .to_string();
     let Some(id) = parse_video_id(&raw) else {
-        return json_error(
-            StatusCode::BAD_REQUEST,
-            "Pass v=VIDEO_ID or a YouTube url=…",
-        )
-        .into_response();
+        return missing_media_id(&headers);
     };
     let quality = normalize_video_quality(q.q.as_deref());
     match download_video(&id, quality).await {
@@ -333,6 +325,26 @@ pub async fn preflight() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     cors_headers(&mut headers);
     (StatusCode::NO_CONTENT, headers)
+}
+
+fn prefers_html(headers: &HeaderMap) -> bool {
+    let accept = headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    accept.contains("text/html") && !accept.contains("application/json")
+}
+
+/// Browser hit `/api/video` without `v=` → send home instead of a JSON error page.
+fn missing_media_id(headers: &HeaderMap) -> Response {
+    if prefers_html(headers) {
+        return Redirect::temporary("/").into_response();
+    }
+    json_error(
+        StatusCode::BAD_REQUEST,
+        "Pass v=VIDEO_ID or a YouTube url=…",
+    )
+    .into_response()
 }
 
 fn json_error(status: StatusCode, message: &str) -> (StatusCode, HeaderMap, String) {

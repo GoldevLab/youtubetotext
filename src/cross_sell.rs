@@ -75,7 +75,7 @@ const FAMILY: &[(&str, &str, &str)] = &[
     (
         "YouTubeForge",
         "YouTube transcript, MP3, SRT, and translation.",
-        "https://youtubetotext.fly.dev",
+        "https://forgeyt.com",
     ),
     (
         "UnderKb",

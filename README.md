@@ -4,7 +4,7 @@ Free YouTube transcripts, audio, SRT, translation, and summaries. Built with [Re
 
 A cleaner competitor to [YouTubeToTranscript](https://youtubetotranscript.com/): searchable lines, real SRT/VTT downloads, shareable URLs, translation, and a free HTTP API. No account, no cookie wall.
 
-Live: [youtubetotext.fly.dev](https://youtubetotext.fly.dev)
+Live: [forgeyt.com](https://forgeyt.com) (also [youtubetotext.fly.dev](https://youtubetotext.fly.dev))
 
 ## What it does
 
@@ -28,7 +28,7 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/api` | API docs |
 | `/extension` | Chrome extension |
 
-`/v/{id}` still redirects to `/?v=`. Custom domain later: set `SITE_URL` (Fly already has the fly.dev value).
+`/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**

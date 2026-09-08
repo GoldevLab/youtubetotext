@@ -106,8 +106,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
         format!("{cue_count} lines · {words} words · ~{read_mins} min read · {duration}")
     };
     let parsed_mode = Mode::parse(&mode);
-    let audio_href = format!("/api/audio?v={video_id}&fmt=mp3");
-    let video_href = format!("/api/video?v={video_id}&q=720");
     let recap = extractive_summary(&doc);
     let ws_class = format!("workspace is-mode-{}", parsed_mode.slug());
     let share = crate::family::app_href(&video_id, parsed_mode);
@@ -397,6 +395,10 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     };
     const startVideoDownload = (ws, href) => startMediaDownload(ws, href, "video");
     const startMediaDownload = async (ws, href, kind) => {
+        if (!href || !/[?&]v=/.test(href)) {
+            F.setStatus(ws, "Missing video id for download.");
+            return;
+        }
         const dlg = ws.querySelector("#r-modal-media-dl") || ws.querySelector(".dl-dialog");
         armVideoDialog(dlg);
         if (dlg instanceof HTMLDialogElement) {
@@ -415,15 +417,14 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             }
             try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
         }
-        const a = document.createElement("a");
-        a.href = href;
-        a.download = "";
-        a.rel = "noopener";
-        a.setAttribute("data-r-full", "");
-        a.style.display = "none";
-        document.body.append(a);
-        a.click();
-        a.remove();
+        // Hidden iframe keeps you on the page; a synthetic <a download> often
+        // navigates to /api/video instead of saving the stream.
+        const frame = document.createElement("iframe");
+        frame.hidden = true;
+        frame.setAttribute("aria-hidden", "true");
+        frame.src = href;
+        document.body.append(frame);
+        setTimeout(() => frame.remove(), 180000);
     };
     const sourcePayload = (ws) => {
         const el = ws.querySelector("#ytt-source");
@@ -786,13 +787,17 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             const audioBtn = t.closest("[data-audio]");
             if (audioBtn) {
                 e.preventDefault();
-                F.downloadAudio(ws, audioBtn.getAttribute("href") || "");
+                const vid = ws.dataset.vid || "";
+                const fmt = ws.querySelector("[data-afmt]")?.value || "mp3";
+                F.downloadAudio(ws, `/api/audio?v=${encodeURIComponent(vid)}&fmt=${encodeURIComponent(fmt)}`);
                 return;
             }
             const videoBtn = t.closest("[data-video]");
             if (videoBtn) {
                 e.preventDefault();
-                F.startVideoDownload(ws, videoBtn.getAttribute("href") || "");
+                const vid = ws.dataset.vid || "";
+                const q = ws.querySelector("[data-vq]")?.value || "720";
+                F.startVideoDownload(ws, `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(q)}`);
                 return;
             }
             if (t.closest("[data-apply]")) {
@@ -919,22 +924,6 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 F.mountPlayer(ws, ms);
             }
         });
-        document.addEventListener("change", (e) => {
-            const t = e.target instanceof Element ? e.target : null;
-            const sel = t?.closest("[data-vq], [data-afmt]");
-            if (!sel || !(sel instanceof HTMLSelectElement)) return;
-            const ws = sel.closest("#ytt-ws") || liveWorkspace();
-            const vid = ws?.dataset.vid;
-            if (!ws || !vid) return;
-            if (sel.hasAttribute("data-vq")) {
-                const a = ws.querySelector("[data-video]");
-                if (a) a.setAttribute("href", `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(sel.value)}`);
-            }
-            if (sel.hasAttribute("data-afmt")) {
-                const a = ws.querySelector("[data-audio]");
-                if (a) a.setAttribute("href", `/api/audio?v=${encodeURIComponent(vid)}&fmt=${encodeURIComponent(sel.value)}`);
-            }
-        });
         document.addEventListener("submit", (e) => {
             const F = window.__yttForge;
             if (!F) return;
@@ -1052,7 +1041,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                                     <option value="wav">"WAV"</option>
                                 </select>
                             </label>
-                            <a class="btn btn-primary" href={audio_href.clone()} download="" data-r-full="" data-audio="">"Download audio"</a>
+                            <button type="button" class="btn btn-primary" data-audio="">"Download audio"</button>
                         </div>
                         <div class="media-dl-row">
                             <label class="media-dl-qwrap">
@@ -1065,7 +1054,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                                     <option value="best">"Best"</option>
                                 </select>
                             </label>
-                            <a class="btn btn-secondary" href={video_href} download="" data-r-full="" data-video="">"Download video"</a>
+                            <button type="button" class="btn btn-secondary" data-video="">"Download video"</button>
                         </div>
                     </div>
                     <Modal id="media-dl" closedBy="any" class="dl-dialog">

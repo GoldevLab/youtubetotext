@@ -3,13 +3,14 @@
   "name": "YouTubeForge",
   "version": "1.0.0",
   "description": "Get a searchable YouTube transcript and open it on YouTubeForge. Free, no account.",
-  "homepage_url": "https://youtubetotext.fly.dev/extension",
+  "homepage_url": "https://forgeyt.com/extension",
   "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
     "https://m.youtube.com/*",
     "https://www.youtube-nocookie.com/*",
+    "https://forgeyt.com/*",
     "https://youtubetotext.fly.dev/*"
   ],
   "background": {
@@ -42,7 +43,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://youtubetotext.fly.dev/*"],
+      "matches": ["https://forgeyt.com/*", "https://youtubetotext.fly.dev/*"],
       "js": ["site.js"],
       "run_at": "document_idle"
     }

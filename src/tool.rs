@@ -84,94 +84,10 @@ pub fn home_search(mode: Mode) -> View {
                 const t = await navigator.clipboard.readText();
                 if (input) input.value = t.trim();
                 input?.focus();
-                syncDlHrefs();
             } catch (_) {}
         });
     }
-    const needId = () => {
-        const id = parseId(input?.value);
-        if (!id) {
-            if (err) {
-                err.hidden = false;
-                err.textContent = "Paste a YouTube link first.";
-            }
-            input?.setAttribute("aria-invalid", "true");
-            input?.focus();
-            return null;
-        }
-        if (err) err.hidden = true;
-        input?.removeAttribute("aria-invalid");
-        return id;
-    };
-    const syncDlHrefs = () => {
-        const id = parseId(input?.value);
-        const q = root.querySelector("[data-vq]")?.value || "720";
-        const afmt = root.querySelector("[data-afmt]")?.value || "mp3";
-        const video = root.querySelector("[data-home-video]");
-        const audio = root.querySelector("[data-home-audio]");
-        if (video) video.href = id ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}` : "/api/video";
-        if (audio) audio.href = id ? `/api/audio?v=${encodeURIComponent(id)}&fmt=${encodeURIComponent(afmt)}` : "/api/audio";
-    };
-    const armVideoDialog = (dlg) => {
-        if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
-        dlg.dataset.ready = "1";
-        if (!("closedBy" in HTMLDialogElement.prototype)) {
-            dlg.addEventListener("click", (event) => {
-                if (event.target !== dlg) return;
-                const rect = dlg.getBoundingClientRect();
-                const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height
-                    && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
-                if (!inside) dlg.close();
-            });
-        }
-    };
-    const startFileDownload = async (href, kind) => {
-        const dlg = root.querySelector("#r-modal-media-dl") || root.querySelector(".dl-dialog");
-        armVideoDialog(dlg);
-        if (dlg instanceof HTMLDialogElement) {
-            const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
-            const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
-            if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
-            if (lead) lead.textContent = kind === "audio"
-                ? "The file will save to your downloads folder. MP3 conversion can take a moment."
-                : "The file will save to your downloads folder. Higher qualities can take a minute.";
-            try {
-                const open = globalThis.__resuma?.showModal?.("media-dl");
-                if (open && typeof open.then === "function") await open;
-                else if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
-            } catch (_) {
-                if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
-            }
-            try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
-        }
-        const a = document.createElement("a");
-        a.href = href;
-        a.download = "";
-        a.rel = "noopener";
-        a.setAttribute("data-r-full", "");
-        a.style.display = "none";
-        document.body.append(a);
-        a.click();
-        a.remove();
-    };
-    input?.addEventListener("input", syncDlHrefs);
-    root.querySelector("[data-vq]")?.addEventListener("change", syncDlHrefs);
-    root.querySelector("[data-afmt]")?.addEventListener("change", syncDlHrefs);
-    root.querySelector("[data-home-video]")?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const id = needId();
-        if (!id) return;
-        syncDlHrefs();
-        startFileDownload(root.querySelector("[data-home-video]")?.href || "", "video");
-    });
-    root.querySelector("[data-home-audio]")?.addEventListener("click", (e) => {
-        e.preventDefault();
-        const id = needId();
-        if (!id) return;
-        syncDlHrefs();
-        startFileDownload(root.querySelector("[data-home-audio]")?.href || "", "audio");
-    });
-    syncDlHrefs();
+    // Audio/video downloads: /js/youtubetotext.js (iframe). Keep this island for paste + submit.
     form?.addEventListener("submit", async (e) => {
         const hp = form.querySelector('[name="website"]');
         if (hp && String(hp.value || "").trim()) {
@@ -286,7 +202,7 @@ pub fn home_search(mode: Mode) -> View {
                             <option value="wav">"WAV"</option>
                         </select>
                     </label>
-                    <a class="btn btn-primary" href="/api/audio" download="" data-r-full="" data-home-audio="">"Download audio"</a>
+                    <button type="button" class="btn btn-primary" data-home-audio="">"Download audio"</button>
                 </div>
                 <div class="hero-dl">
                     <label class="media-dl-qwrap">
@@ -299,7 +215,7 @@ pub fn home_search(mode: Mode) -> View {
                             <option value="best">"Best"</option>
                         </select>
                     </label>
-                    <a class="btn btn-secondary" href="/api/video" download="" data-r-full="" data-home-video="">"Download video"</a>
+                    <button type="button" class="btn btn-secondary" data-home-video="">"Download video"</button>
                 </div>
                 {ts_block}
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>

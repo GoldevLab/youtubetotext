@@ -160,7 +160,6 @@ fn pending() -> View {
 }
 
 fn fail_view(message: String, retry: String, vid: String) -> View {
-    let audio = format!("/api/audio?v={vid}");
     view! {
         <main class="content-section">
             <h1>"Could not load that transcript"</h1>
@@ -168,7 +167,7 @@ fn fail_view(message: String, retry: String, vid: String) -> View {
             <p class="error-actions">
                 <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
                 <NavLink href="/" class="btn btn-ghost">"Another link"</NavLink>
-                <a class="btn btn-ghost" href={audio} download="" data-r-full="">"Download audio anyway"</a>
+                <button type="button" class="btn btn-ghost" data-fail-audio="" data-vid={vid}>"Download audio anyway"</button>
             </p>
         </main>
     }
