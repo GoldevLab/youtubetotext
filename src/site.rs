@@ -1,5 +1,7 @@
 //! Contact, measurement, and Search Console extras (all optional env).
 
+use resuma::prelude::*;
+
 pub fn contact_email() -> Option<String> {
     std::env::var("CONTACT_EMAIL")
         .ok()
@@ -14,11 +16,59 @@ pub fn chrome_store_url() -> Option<String> {
         .filter(|s| s.starts_with("https://"))
 }
 
+/// Send `youtubetotext.fly.dev` HTML traffic to the canonical domain.
+/// Leaves `/health` and `/ready` alone (those are Resuma ops routes, not Flow).
+#[middleware]
+async fn redirect_legacy_fly_host(req: FlowRequest) -> Result<FlowRequest> {
+    const LEGACY: &str = "youtubetotext.fly.dev";
+    let host = req
+        .header("x-forwarded-host")
+        .or_else(|| req.header("host"))
+        .unwrap_or("")
+        .split(',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if host != LEGACY {
+        return Ok(req);
+    }
+    let origin = crate::family::public_origin().trim_end_matches('/').to_string();
+    if origin.is_empty() || origin.contains("fly.dev") {
+        return Ok(req);
+    }
+    let path = if req.path.is_empty() {
+        "/"
+    } else {
+        req.path.as_str()
+    };
+    let mut loc = format!("{origin}{path}");
+    if !req.query.is_empty() {
+        let mut ser = url::form_urlencoded::Serializer::new(String::new());
+        for (k, v) in &req.query {
+            ser.append_pair(k, v);
+        }
+        let qs = ser.finish();
+        if !qs.is_empty() {
+            loc.push('?');
+            loc.push_str(&qs);
+        }
+    }
+    Err(ResumaError::Redirect(loc))
+}
+
 pub fn head_extras() -> String {
     let mut out = String::new();
     if let Ok(v) = std::env::var("GSC_VERIFICATION") {
         let v = v.trim();
-        if !v.is_empty() && v.len() < 120 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        if !v.is_empty()
+            && v.len() < 120
+            && v
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
         {
             out.push_str(&format!(
                 r#"<meta name="google-site-verification" content="{v}" />"#
@@ -27,7 +77,12 @@ pub fn head_extras() -> String {
     }
     if let Ok(id) = std::env::var("GA4_ID") {
         let id = id.trim();
-        if id.starts_with("G-") && id.len() < 20 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+        if id.starts_with("G-")
+            && id.len() < 20
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        {
             out.push_str(&format!(
                 r#"<script async src="https://www.googletagmanager.com/gtag/js?id={id}"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments);}}gtag('js',new Date());gtag('config','{id}');</script>"#
