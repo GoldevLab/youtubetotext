@@ -80,7 +80,7 @@ const FAMILY: &[(&str, &str, &str)] = &[
     (
         "UnderKb",
         "Compress images to a real KB target. JPG, WebP, PNG.",
-        "https://underkb.fly.dev",
+        "https://under200kb.com",
     ),
     (
         "PDFForge",
