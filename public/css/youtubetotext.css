@@ -1961,6 +1961,15 @@ select:focus-visible {
     flex: 1 1 100%;
   }
 
+  .player-links {
+    flex-direction: column;
+  }
+
+  .player-links .btn {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
   .player-card,
   .transcript-col {
     padding: 0.7rem;
