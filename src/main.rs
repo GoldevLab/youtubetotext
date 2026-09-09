@@ -273,7 +273,7 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preload" href="/themes.css" as="style" />
-<link rel="preload" href="/css/youtubetotext.css?v=r3" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r4" as="style" />
 <link rel="stylesheet" href="/themes.css" />
 <script type="module" src="/js/youtubetotext.js?v=6" fetchpriority="low"></script>
 "##;
@@ -340,7 +340,7 @@ async fn main() -> std::io::Result<()> {
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r3")
+        .with_stylesheet("/css/youtubetotext.css?v=r4")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -369,14 +369,14 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-15".into(),
+            cache_version: "yf-16".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("Y".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r3".into(),
+                "/css/youtubetotext.css?v=r4".into(),
                 "/js/youtubetotext.js?v=6".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
