@@ -158,17 +158,47 @@
   }
   document.addEventListener("resuma:navigate", () => requestAnimationFrame(tryHero));
 
-  /* Meta Pixel SPA page views (only if META_PIXEL_ID loaded fbq). */
+  /* Meta Pixel + CAPI ViewContent (shared eventID). Pixel boot defines __yttMetaViewContent. */
   const trackMetaNav = () => {
-    if (typeof window.fbq !== "function") return;
     try {
-      window.fbq("track", "PageView");
-      if (new URLSearchParams(location.search).get("v")) {
-        window.fbq("track", "ViewContent", { content_name: "transcript" });
+      if (typeof window.__yttMetaViewContent === "function") {
+        window.__yttMetaViewContent();
+        return;
       }
+      if (typeof window.fbq !== "function") return;
+      window.fbq("track", "PageView");
+      const v = new URLSearchParams(location.search).get("v");
+      if (!v) return;
+      const eid =
+        (crypto.randomUUID && crypto.randomUUID()) ||
+        `vc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+      window.fbq(
+        "track",
+        "ViewContent",
+        { content_name: "transcript", content_type: "product", content_ids: [v] },
+        { eventID: eid },
+      );
+      fetch("/api/meta/view-content", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        keepalive: true,
+        body: JSON.stringify({
+          event_id: eid,
+          v,
+          event_source_url: String(location.href || "").slice(0, 2048),
+        }),
+      }).catch(() => {});
     } catch (_) {}
   };
-  document.addEventListener("resuma:navigate", () => queueMicrotask(trackMetaNav));
+  document.addEventListener("resuma:navigate", () => {
+    if (typeof window.fbq === "function") {
+      try {
+        window.fbq("track", "PageView");
+      } catch (_) {}
+    }
+    queueMicrotask(trackMetaNav);
+  });
 
   const readClipboardText = async () => {
     try {

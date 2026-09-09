@@ -326,6 +326,36 @@ pub struct GateBody {
     pub token: Option<String>,
 }
 
+/// Browser Pixel twin: ViewContent via Meta CAPI with shared `event_id` for dedupe.
+/// No-op 204 when `PRIVATE_PIXEL_TOKEN` is unset (Pixel-only still works).
+pub async fn meta_view_content(
+    headers: HeaderMap,
+    Json(body): Json<crate::meta_conversions::ViewContentBody>,
+) -> impl IntoResponse {
+    if let Err(m) = guard::check_app_access(&headers, guard::API) {
+        return json_error(StatusCode::NOT_FOUND, &m);
+    }
+    if !crate::meta_conversions::is_configured() {
+        return file_response(
+            StatusCode::NO_CONTENT,
+            "application/json; charset=utf-8",
+            None,
+            String::new(),
+            false,
+        );
+    }
+    match crate::meta_conversions::track_view_content(&headers, body).await {
+        Ok(()) => file_response(
+            StatusCode::NO_CONTENT,
+            "application/json; charset=utf-8",
+            None,
+            String::new(),
+            false,
+        ),
+        Err(m) => json_error(StatusCode::BAD_REQUEST, m),
+    }
+}
+
 pub async fn preflight(headers: HeaderMap) -> impl IntoResponse {
     let mut out = HeaderMap::new();
     cors_headers_for(&headers, &mut out);

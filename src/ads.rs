@@ -40,6 +40,7 @@ const YOUTUBE_ORIGINS: &[&str] = &[
 const META_PIXEL_ORIGINS: &[&str] = &[
     "https://connect.facebook.net",
     "https://www.facebook.com",
+    "https://graph.facebook.com",
 ];
 
 pub fn client_id() -> Option<String> {

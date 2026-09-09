@@ -128,6 +128,7 @@ pub fn head_extras() -> String {
         }
     }
     // Meta Pixel — deferred like GA4 so lab TBT stays green. Set META_PIXEL_ID (digits only).
+    // When PRIVATE_PIXEL_TOKEN is also set, ViewContent is mirrored to CAPI with the same eventID.
     if let Ok(id) = std::env::var("META_PIXEL_ID") {
         let id = id.trim();
         if !id.is_empty()
@@ -140,6 +141,53 @@ pub fn head_extras() -> String {
 <script>
 (function(){{
   var id={id:?};
+  function cookie(n){{
+    try{{
+      var parts=document.cookie.split(';');
+      for(var i=0;i<parts.length;i++){{
+        var p=parts[i].trim();
+        if(p.indexOf(n+'=')===0)return decodeURIComponent(p.slice(n.length+1));
+      }}
+    }}catch(_){{}}
+    return '';
+  }}
+  function eventId(){{
+    try{{if(crypto.randomUUID)return crypto.randomUUID();}}catch(_){{}}
+    return 'vc_'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+  }}
+  function sendCapi(payload){{
+    try{{
+      var body=JSON.stringify(payload);
+      fetch('/api/meta/view-content',{{
+        method:'POST',
+        headers:{{'content-type':'application/json'}},
+        body:body,
+        credentials:'same-origin',
+        keepalive:true
+      }}).catch(function(){{}});
+    }}catch(_){{}}
+  }}
+  function trackViewContent(){{
+    var v='';
+    try{{v=new URLSearchParams(location.search).get('v')||'';}}catch(_){{}}
+    if(!v||typeof fbq!=='function')return;
+    var eid=eventId();
+    try{{
+      fbq('track','ViewContent',{{
+        content_name:'transcript',
+        content_type:'product',
+        content_ids:[v]
+      }},{{eventID:eid}});
+    }}catch(_){{}}
+    sendCapi({{
+      event_id:eid,
+      v:v,
+      event_source_url:String(location.href||'').slice(0,2048),
+      fbp:cookie('_fbp')||undefined,
+      fbc:cookie('_fbc')||undefined
+    }});
+  }}
+  window.__yttMetaViewContent=trackViewContent;
   function boot(){{
     if(window.__yttMetaPixel)return;
     window.__yttMetaPixel=1;
@@ -151,9 +199,7 @@ pub fn head_extras() -> String {
     'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init',id);
     fbq('track','PageView');
-    try{{
-      if(new URLSearchParams(location.search).get('v'))fbq('track','ViewContent',{{content_name:'transcript'}});
-    }}catch(_){{}}
+    trackViewContent();
   }}
   function arm(){{
     var start=function(){{boot();}};

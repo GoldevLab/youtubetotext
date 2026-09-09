@@ -48,12 +48,14 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `GSC_VERIFICATION` | Search Console HTML meta tag (paste the content= value) |
 | `GA4_ID` (`G-…`) or `PLAUSIBLE_DOMAIN` | Analytics |
 | `META_PIXEL_ID` (digits only) | Meta Pixel (deferred; PageView + ViewContent on `?v=`) |
+| `PRIVATE_PIXEL_TOKEN` | Meta Conversions API token — mirrors ViewContent server-side with the same `event_id` as the Pixel |
+| `META_TEST_EVENT_CODE` (optional) | Events Manager test code while verifying CAPI |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` | Home paste captcha |
 
 **You do in Google / Meta (not in git):**
 1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml`.
 2. [AdSense](https://www.google.com/adsense/) → Sites → add `forgeyt.com` → create a responsive Display unit → set `ADSENSE_CLIENT` + `ADSENSE_SLOT` as Fly secrets (then `/ads.txt` stops 404).
-3. [Meta Events Manager](https://business.facebook.com/events_manager) → Connect data source → Web → Pixel → copy Pixel ID → `fly secrets set META_PIXEL_ID=123456789012345` → verify with Meta Pixel Helper.
+3. [Meta Events Manager](https://business.facebook.com/events_manager) → Connect data source → Web → Pixel → copy Pixel ID → `fly secrets set META_PIXEL_ID=123456789012345`. For Conversions API (recommended): generate a token under Settings → Conversions API → `fly secrets set PRIVATE_PIXEL_TOKEN=…`. Pixel + CAPI share `event_id` on ViewContent (`?v=`) so Meta dedupes. Optional: `META_TEST_EVENT_CODE` while testing. Verify with Meta Pixel Helper / Test Events.
 
 `youtubetotext.fly.dev` page traffic redirects to `forgeyt.com` (probes `/health` stay on Fly).
 

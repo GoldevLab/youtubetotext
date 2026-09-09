@@ -75,7 +75,7 @@ pub fn page(_req: FlowRequest) -> View {
 
             <h2>"Analytics"</h2>
             <p>
-                "If GA4_ID, PLAUSIBLE_DOMAIN, or META_PIXEL_ID is set on the server, page views (and Meta ad attribution when the Pixel is on) are measured so we can see which landings and ads work. Scripts load after engagement or idle so they do not block first paint. No account on this site either way. Meta’s data policy: "
+                "If GA4_ID, PLAUSIBLE_DOMAIN, or META_PIXEL_ID is set on the server, page views (and Meta ad attribution when the Pixel is on) are measured so we can see which landings and ads work. When PRIVATE_PIXEL_TOKEN is also set, ViewContent for transcript pages (`?v=`) is sent to Meta’s Conversions API as well as the browser Pixel, using the same event id so Meta can dedupe. Scripts load after engagement or idle so they do not block first paint. No account on this site either way. Meta’s data policy: "
                 <a href="https://www.facebook.com/privacy/policy/" rel="noopener">"facebook.com/privacy/policy"</a>
                 "."
             </p>
