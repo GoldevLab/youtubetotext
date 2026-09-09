@@ -416,6 +416,11 @@ async fn main() -> std::io::Result<()> {
         })
         .route("/app/youtube", get(redirect_app_youtube))
         .route("/v/{id}", get(redirect_video))
+        // Common guess from “YouTube to MP3” copy — canonical SEO path is /youtube-to-audio.
+        .route(
+            "/youtube-to-mp3",
+            get(|| async { Redirect::permanent("/youtube-to-audio") }),
+        )
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))
