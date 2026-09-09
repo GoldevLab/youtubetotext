@@ -1877,8 +1877,11 @@ fn content_range_total(resp: &reqwest::Response) -> Option<u64> {
 }
 
 /// googlevideo 403s open-ended and large Range requests; ~1 MiB slices work.
+/// ~200 MiB covers ~2h of AAC ~128–160 kbps so long talks still proxy.
 const GV_CHUNK: u64 = 1024 * 1024;
-const GV_MAX: u64 = 80 * 1024 * 1024;
+const GV_MAX: u64 = 200 * 1024 * 1024;
+/// yt-dlp may remux DASH before emitting bytes; keep under Fly `idle_timeout` (300s).
+const YTDLP_FIRST_BYTE: Duration = Duration::from_secs(270);
 
 pub type AudioByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
 
@@ -1948,7 +1951,7 @@ async fn open_audio_stream(url: &str, ua: &str) -> Result<(u64, AudioByteStream)
     if total > GV_MAX {
         return Err(FetchError::new(
             413,
-            "That audio file is too large to proxy. Open the video on YouTube instead.",
+            "That audio file is too large to proxy (over ~200 MB). Try a shorter clip, or open the video on YouTube.",
         ));
     }
     let first = probe
@@ -2010,6 +2013,19 @@ async fn peek_audio_len(url: &str, ua: &str) -> Result<u64, FetchError> {
     })
 }
 
+enum YtdlpPhase {
+    First {
+        child: tokio::process::Child,
+        reader: tokio_util::io::ReaderStream<tokio::process::ChildStdout>,
+        stderr: Option<tokio::process::ChildStderr>,
+        fail: String,
+    },
+    Rest {
+        reader: tokio_util::io::ReaderStream<tokio::process::ChildStdout>,
+    },
+    Done,
+}
+
 async fn stream_ytdlp(
     video_id: &str,
     mut pick: AudioPick,
@@ -2027,7 +2043,12 @@ async fn stream_ytdlp(
     let mut cmd = tokio::process::Command::new(bin);
     if Path::new("/usr/bin/ffmpeg").is_file() {
         cmd.env("FFMPEG", "/usr/bin/ffmpeg");
+        cmd.env("PATH", "/usr/bin:/usr/local/bin");
     }
+    // Prefer progressive MP4 so the first bytes leave soon (Fly idle timeout).
+    // Long DASH remuxes still work but need TMPDIR + memory headroom.
+    // Return HTTP headers immediately; first body chunk waits inside the stream
+    // so proxies see an open response while yt-dlp/ffmpeg warm up.
     let mut child = cmd
         .args([
             "-f",
@@ -2037,11 +2058,30 @@ async fn stream_ytdlp(
             "--no-progress",
             "--no-warnings",
             "--no-playlist",
+            "--no-mtime",
+            // Cap per-format size so a 2h 4K remux cannot fill ephemeral /tmp.
+            "--max-filesize",
+            "3G",
+            "--retries",
+            "8",
+            "--fragment-retries",
+            "8",
+            "--retry-sleep",
+            "2",
+            "--socket-timeout",
+            "30",
+            "--concurrent-fragments",
+            "4",
+            "--buffer-size",
+            "64K",
+            "--http-chunk-size",
+            "10M",
         ])
         .args(extra)
         .args(["--", &url])
         .env("HOME", "/tmp")
         .env("XDG_CACHE_HOME", "/tmp")
+        .env("TMPDIR", "/tmp")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -2051,15 +2091,103 @@ async fn stream_ytdlp(
         .stdout
         .take()
         .ok_or_else(|| FetchError::new(502, fail.to_string()))?;
-    tokio::spawn(async move {
-        let _ = child.wait().await;
-    });
-    let stream = tokio_util::io::ReaderStream::new(stdout)
-        .map(|item| item.map_err(|e| io::Error::other(e.to_string())));
+    let stderr = child.stderr.take();
+    let reader = tokio_util::io::ReaderStream::new(stdout);
+    let fail_s = fail.to_string();
+    let s = stream::unfold(
+        YtdlpPhase::First {
+            child,
+            reader,
+            stderr,
+            fail: fail_s,
+        },
+        |phase| async move {
+            match phase {
+                YtdlpPhase::Done => None,
+                YtdlpPhase::Rest { mut reader } => match reader.next().await {
+                    Some(Ok(chunk)) => Some((Ok(chunk), YtdlpPhase::Rest { reader })),
+                    Some(Err(e)) => Some((
+                        Err(io::Error::other(e.to_string())),
+                        YtdlpPhase::Done,
+                    )),
+                    None => None,
+                },
+                YtdlpPhase::First {
+                    mut child,
+                    mut reader,
+                    stderr,
+                    fail,
+                } => {
+                    let first = tokio::time::timeout(YTDLP_FIRST_BYTE, reader.next()).await;
+                    match first {
+                        Ok(Some(Ok(chunk))) if !chunk.is_empty() => {
+                            tokio::spawn(async move {
+                                let _ = child.wait().await;
+                            });
+                            Some((Ok(chunk), YtdlpPhase::Rest { reader }))
+                        }
+                        Ok(Some(Ok(_))) => {
+                            let _ = child.kill().await;
+                            Some((
+                                Err(io::Error::other(
+                                    "YouTube returned an empty media stream. Try another quality.",
+                                )),
+                                YtdlpPhase::Done,
+                            ))
+                        }
+                        Ok(Some(Err(e))) => {
+                            let _ = child.kill().await;
+                            Some((
+                                Err(io::Error::other(format!("{fail} ({e})."))),
+                                YtdlpPhase::Done,
+                            ))
+                        }
+                        Ok(None) => {
+                            let hint = read_ytdlp_stderr(stderr).await;
+                            let _ = child.wait().await;
+                            let msg = if hint.is_empty() {
+                                format!("{fail}. Try a lower quality or a shorter public video.")
+                            } else {
+                                format!("{fail}: {hint}")
+                            };
+                            Some((Err(io::Error::other(msg)), YtdlpPhase::Done))
+                        }
+                        Err(_) => {
+                            let _ = child.kill().await;
+                            Some((
+                                Err(io::Error::other(
+                                    "This download is taking too long to start (common on 1–2h videos at high quality). Try 360p/480p, or download audio instead.",
+                                )),
+                                YtdlpPhase::Done,
+                            ))
+                        }
+                    }
+                }
+            }
+        },
+    );
     if pick.ext.is_empty() {
         pick.ext = "mp4".into();
     }
-    Ok((pick, 0, Box::pin(stream)))
+    Ok((pick, 0, Box::pin(s)))
+}
+
+async fn read_ytdlp_stderr(stderr: Option<impl tokio::io::AsyncRead + Unpin>) -> String {
+    let Some(mut stderr) = stderr else {
+        return String::new();
+    };
+    let mut buf = Vec::new();
+    let _ = tokio::time::timeout(
+        Duration::from_secs(2),
+        tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut buf),
+    )
+    .await;
+    let raw = String::from_utf8_lossy(&buf);
+    raw.lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.chars().take(160).collect())
+        .unwrap_or_default()
 }
 
 fn ffmpeg_available() -> bool {
@@ -2075,6 +2203,8 @@ pub fn normalize_video_quality(raw: Option<&str>) -> &'static str {
         "360" | "360p" => "360",
         "480" | "480p" => "480",
         "1080" | "1080p" => "1080",
+        "1440" | "1440p" | "2k" => "1440",
+        "2160" | "2160p" | "4k" | "uhd" => "2160",
         "best" | "max" => "best",
         _ => "720",
     }
@@ -2085,12 +2215,20 @@ fn video_ytdlp_format(quality: &str, ffmpeg: bool) -> String {
         "360" => Some(360u32),
         "480" => Some(480),
         "1080" => Some(1080),
+        "1440" => Some(1440),
+        "2160" => Some(2160),
         "best" => None,
         _ => Some(720),
     };
+    // Progressive MP4 first so long videos start streaming before any remux.
+    // Fall back to DASH+ffmpeg merge when YouTube only offers separate A/V.
     match (ffmpeg, height) {
-        (true, None) => "bv*+ba/b".into(),
-        (true, Some(h)) => format!("b[height<={h}][ext=mp4]/bv*[height<={h}]+ba/b[height<={h}]/b"),
+        (true, None) => {
+            "b[ext=mp4]/best[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b".into()
+        }
+        (true, Some(h)) => format!(
+            "b[height<={h}][ext=mp4]/best[height<={h}][ext=mp4]/bv*[height<={h}][ext=mp4]+ba[ext=m4a]/bv*[height<={h}]+ba/b[height<={h}]/b"
+        ),
         (false, None) => "best[ext=mp4]/best".into(),
         (false, Some(h)) => {
             format!("best[height<={h}][ext=mp4]/best[height<={h}]/best")
@@ -2506,10 +2644,13 @@ mod tests {
         assert_eq!(normalize_video_quality(None), "720");
         assert_eq!(normalize_video_quality(Some("1080p")), "1080");
         assert_eq!(normalize_video_quality(Some("best")), "best");
+        assert_eq!(normalize_video_quality(Some("4k")), "2160");
+        assert_eq!(normalize_video_quality(Some("1440p")), "1440");
         let muxed = video_ytdlp_format("720", false);
         assert!(muxed.contains("height<=720"));
         let dash = video_ytdlp_format("1080", true);
         assert!(dash.contains("bv*"));
+        assert!(dash.contains("ext=mp4"));
     }
 
     #[test]

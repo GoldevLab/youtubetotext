@@ -212,6 +212,8 @@ pub fn home_search(mode: Mode) -> View {
                             <option value="480">"480p"</option>
                             <option value="720" selected=true>"720p"</option>
                             <option value="1080">"1080p"</option>
+                            <option value="1440">"1440p"</option>
+                            <option value="2160">"4K"</option>
                             <option value="best">"Best"</option>
                         </select>
                     </label>

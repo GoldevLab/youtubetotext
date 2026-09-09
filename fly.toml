@@ -22,6 +22,10 @@ primary_region = "dfw"
   min_machines_running = 1
   processes = ["app"]
 
+  [http_service.http_options]
+    # Long yt-dlp/ffmpeg downloads (1–2h talks) need more than the default ~60s idle.
+    idle_timeout = 300
+
   [http_service.http_options.response]
     # Stop advertising Fly’s Server / Via fingerprints (monitor.works finding).
     pristine = true
@@ -49,4 +53,5 @@ primary_region = "dfw"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  # 512mb gives ffmpeg room to remux long DASH streams (256mb OOMs on ~1–2h).
+  memory = "512mb"

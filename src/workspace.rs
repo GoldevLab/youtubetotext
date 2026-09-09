@@ -406,8 +406,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
             if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
             if (lead) lead.textContent = kind === "audio"
-                ? "The file will save to your downloads folder. MP3 conversion can take a moment."
-                : "The file will save to your downloads folder. Higher qualities can take a minute.";
+                ? "The file will save to your downloads folder. Long talks / MP3 conversion can take a few minutes — keep this tab open."
+                : "The file will save to your downloads folder. 1–2 hour videos at 1080p/4K can take several minutes to start. If it stalls, try 360p or 480p.";
             try {
                 const open = globalThis.__resuma?.showModal?.("media-dl");
                 if (open && typeof open.then === "function") await open;
@@ -1051,6 +1051,8 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                                     <option value="480">"480p"</option>
                                     <option value="720" selected=true>"720p"</option>
                                     <option value="1080">"1080p"</option>
+                                    <option value="1440">"1440p"</option>
+                                    <option value="2160">"4K"</option>
                                     <option value="best">"Best"</option>
                                 </select>
                             </label>
