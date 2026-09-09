@@ -275,7 +275,7 @@ const HEAD: &str = r##"
 <link rel="preload" href="/themes.css" as="style" />
 <link rel="preload" href="/css/youtubetotext.css?v=r4" as="style" />
 <link rel="stylesheet" href="/themes.css" />
-<script type="module" src="/js/youtubetotext.js?v=6" fetchpriority="low"></script>
+<script type="module" src="/js/youtubetotext.js?v=7" fetchpriority="low"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -369,7 +369,7 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-16".into(),
+            cache_version: "yf-17".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
@@ -377,7 +377,7 @@ async fn main() -> std::io::Result<()> {
             precache_paths: vec![
                 "/themes.css".into(),
                 "/css/youtubetotext.css?v=r4".into(),
-                "/js/youtubetotext.js?v=6".into(),
+                "/js/youtubetotext.js?v=7".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
                 "/icons/icon-512.png".into(),

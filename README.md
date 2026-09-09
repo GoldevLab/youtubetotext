@@ -47,11 +47,13 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `CHROME_STORE_URL` | Store button on `/extension` |
 | `GSC_VERIFICATION` | Search Console HTML meta tag (paste the content= value) |
 | `GA4_ID` (`G-…`) or `PLAUSIBLE_DOMAIN` | Analytics |
+| `META_PIXEL_ID` (digits only) | Meta Pixel (deferred; PageView + ViewContent on `?v=`) |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` | Home paste captcha |
 
-**You do in Google (not in git):**
+**You do in Google / Meta (not in git):**
 1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml`.
 2. [AdSense](https://www.google.com/adsense/) → Sites → add `forgeyt.com` → create a responsive Display unit → set `ADSENSE_CLIENT` + `ADSENSE_SLOT` as Fly secrets (then `/ads.txt` stops 404).
+3. [Meta Events Manager](https://business.facebook.com/events_manager) → Connect data source → Web → Pixel → copy Pixel ID → `fly secrets set META_PIXEL_ID=123456789012345` → verify with Meta Pixel Helper.
 
 `youtubetotext.fly.dev` page traffic redirects to `forgeyt.com` (probes `/health` stay on Fly).
 

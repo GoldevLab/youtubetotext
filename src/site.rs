@@ -127,5 +127,48 @@ pub fn head_extras() -> String {
             ));
         }
     }
+    // Meta Pixel — deferred like GA4 so lab TBT stays green. Set META_PIXEL_ID (digits only).
+    if let Ok(id) = std::env::var("META_PIXEL_ID") {
+        let id = id.trim();
+        if !id.is_empty()
+            && id.len() <= 20
+            && id.bytes().all(|b| b.is_ascii_digit())
+        {
+            out.push_str(&format!(
+                r#"<link rel="dns-prefetch" href="https://connect.facebook.net" />
+<link rel="dns-prefetch" href="https://www.facebook.com" />
+<script>
+(function(){{
+  var id={id:?};
+  function boot(){{
+    if(window.__yttMetaPixel)return;
+    window.__yttMetaPixel=1;
+    !function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)}};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.fetchPriority='low';t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}}(window,document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init',id);
+    fbq('track','PageView');
+    try{{
+      if(new URLSearchParams(location.search).get('v'))fbq('track','ViewContent',{{content_name:'transcript'}});
+    }}catch(_){{}}
+  }}
+  function arm(){{
+    var start=function(){{boot();}};
+    ['pointerdown','keydown','touchstart','scroll'].forEach(function(e){{
+      window.addEventListener(e,start,{{once:true,passive:true}});
+    }});
+    if('requestIdleCallback' in window)requestIdleCallback(start,{{timeout:12000}});
+    else window.addEventListener('load',function(){{setTimeout(start,8000);}},{{once:true}});
+  }}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',arm,{{once:true}});
+  else arm();
+}})();
+</script>"#
+            ));
+        }
+    }
     out
 }

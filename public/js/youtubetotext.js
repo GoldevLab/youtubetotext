@@ -158,6 +158,18 @@
   }
   document.addEventListener("resuma:navigate", () => requestAnimationFrame(tryHero));
 
+  /* Meta Pixel SPA page views (only if META_PIXEL_ID loaded fbq). */
+  const trackMetaNav = () => {
+    if (typeof window.fbq !== "function") return;
+    try {
+      window.fbq("track", "PageView");
+      if (new URLSearchParams(location.search).get("v")) {
+        window.fbq("track", "ViewContent", { content_name: "transcript" });
+      }
+    } catch (_) {}
+  };
+  document.addEventListener("resuma:navigate", () => queueMicrotask(trackMetaNav));
+
   const parseYouTubeId = (raw) => {
     const s = String(raw || "").trim();
     if (/^[\w-]{11}$/.test(s)) return s;

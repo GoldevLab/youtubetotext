@@ -36,6 +36,12 @@ const YOUTUBE_ORIGINS: &[&str] = &[
     "https://s.ytimg.com",
 ];
 
+/// Meta Pixel (fbevents.js + graph hits). Only matters when META_PIXEL_ID is set.
+const META_PIXEL_ORIGINS: &[&str] = &[
+    "https://connect.facebook.net",
+    "https://www.facebook.com",
+];
+
 pub fn client_id() -> Option<String> {
     std::env::var(CLIENT_ENV)
         .ok()
@@ -125,7 +131,11 @@ pub fn apply_csp(csp: &mut CspConfig) {
     // `'strict-dynamic'` ignores host allowlists; adsbygoogle.js is injected
     // without a Resuma nonce, so host allowlists must remain effective.
     csp.strict_dynamic = false;
-    for origin in YOUTUBE_ORIGINS.iter().chain(ADSENSE_ORIGINS) {
+    for origin in YOUTUBE_ORIGINS
+        .iter()
+        .chain(ADSENSE_ORIGINS)
+        .chain(META_PIXEL_ORIGINS)
+    {
         push_unique(&mut csp.script_src, origin);
         push_unique(&mut csp.img_src, origin);
         push_unique(&mut csp.connect_src, origin);

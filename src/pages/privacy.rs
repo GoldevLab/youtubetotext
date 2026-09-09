@@ -75,7 +75,9 @@ pub fn page(_req: FlowRequest) -> View {
 
             <h2>"Analytics"</h2>
             <p>
-                "If GA4_ID or PLAUSIBLE_DOMAIN is set on the server, page views are measured so we can see which landings work. No account on this site either way."
+                "If GA4_ID, PLAUSIBLE_DOMAIN, or META_PIXEL_ID is set on the server, page views (and Meta ad attribution when the Pixel is on) are measured so we can see which landings and ads work. Scripts load after engagement or idle so they do not block first paint. No account on this site either way. Meta’s data policy: "
+                <a href="https://www.facebook.com/privacy/policy/" rel="noopener">"facebook.com/privacy/policy"</a>
+                "."
             </p>
             <h2>"Contact"</h2>
             {contact_line()}
