@@ -34,7 +34,7 @@ primary_region = "dfw"
     X-XSS-Protection = "0"
     X-DNS-Prefetch-Control = "off"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=(), clipboard-read=(self), clipboard-write=(self)"
     Cross-Origin-Opener-Policy = "same-origin"
     Cross-Origin-Resource-Policy = "same-origin"
     # Enforcing CSP (Resuma still emits Report-Only until frame-src ships).

@@ -76,43 +76,10 @@ pub fn home_search(mode: Mode) -> View {
         recents.append(label, ul);
     };
     renderRecent();
+    // Paste is handled in /js/youtubetotext.js (capture) so the first mobile tap
+    // works before this island chunk finishes loading.
     const pasteBtn = root.querySelector("[data-paste]");
-    // Always show Paste. Mobile Safari/Chrome often lack clipboard.readText or
-    // deny it; fall back to focusing the field for the OS long-press paste.
-    if (pasteBtn) {
-        pasteBtn.hidden = false;
-        pasteBtn.addEventListener("click", async () => {
-            const showHint = (msg) => {
-                if (!err) return;
-                err.hidden = false;
-                err.textContent = msg;
-                setTimeout(() => {
-                    if (err.textContent === msg) {
-                        err.hidden = true;
-                        err.textContent = "";
-                    }
-                }, 4000);
-            };
-            try {
-                if (navigator.clipboard?.readText) {
-                    const t = await navigator.clipboard.readText();
-                    const text = String(t || "").trim();
-                    if (text) {
-                        if (input) input.value = text;
-                        input?.removeAttribute("aria-invalid");
-                        if (err) err.hidden = true;
-                        input?.focus();
-                        return;
-                    }
-                }
-            } catch (_) {}
-            input?.focus();
-            try {
-                input?.select?.();
-            } catch (_) {}
-            showHint("Long-press the link field and choose Paste.");
-        });
-    }
+    if (pasteBtn) pasteBtn.hidden = false;
     // Audio/video downloads: /js/youtubetotext.js (iframe). Keep this island for paste + submit.
     form?.addEventListener("submit", async (e) => {
         const hp = form.querySelector('[name="website"]');
@@ -211,7 +178,14 @@ pub fn home_search(mode: Mode) -> View {
                             placeholder="https://www.youtube.com/watch?v=…"
                             aria-describedby="url-help url-error"
                         />
-                        <button type="button" class="btn btn-ghost" data-paste="">"Paste"</button>
+                        <button
+                            type="button"
+                            class="btn btn-ghost"
+                            data-paste=""
+                            aria-label="Paste YouTube link from clipboard"
+                        >
+                            "Paste"
+                        </button>
                         <button type="submit" class="btn btn-primary">
                             <span class="btn-spinner" aria-hidden="true"></span>
                             <span>{cta}</span>

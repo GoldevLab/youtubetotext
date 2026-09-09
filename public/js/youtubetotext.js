@@ -170,6 +170,101 @@
   };
   document.addEventListener("resuma:navigate", () => queueMicrotask(trackMetaNav));
 
+  const readClipboardText = async () => {
+    try {
+      if (navigator.clipboard?.readText) {
+        const t = await navigator.clipboard.readText();
+        const text = String(t || "").trim();
+        if (text) return text;
+      }
+    } catch (_) {}
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (!item.types.includes("text/plain")) continue;
+          const blob = await item.getType("text/plain");
+          const text = String((await blob.text()) || "").trim();
+          if (text) return text;
+        }
+      }
+    } catch (_) {}
+    return "";
+  };
+
+  /* Capture-phase Paste so mobile taps work before the home island chunk loads.
+     iOS/Android often deny clipboard.readText — then focus the field for OS paste. */
+  document.addEventListener(
+    "click",
+    async (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      const btn = t?.closest("[data-paste]");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      const root =
+        btn.closest("#ytt-home") ||
+        btn.closest("form") ||
+        document.getElementById("ytt-home");
+      const input =
+        root?.querySelector('input[name="url"]') ||
+        document.querySelector('input[name="url"]');
+      const err =
+        root?.querySelector("[data-form-error]") ||
+        document.querySelector("[data-form-error]");
+
+      const showHint = (msg) => {
+        if (!err) return;
+        err.hidden = false;
+        err.textContent = msg;
+        err.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+        window.clearTimeout(showHint._t);
+        showHint._t = window.setTimeout(() => {
+          if (err.textContent === msg) {
+            err.hidden = true;
+            err.textContent = "";
+          }
+        }, 5000);
+      };
+
+      btn.disabled = true;
+      try {
+        const text = await readClipboardText();
+        if (text && input) {
+          input.value = text;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.removeAttribute("aria-invalid");
+          if (err) {
+            err.hidden = true;
+            err.textContent = "";
+          }
+          input.focus({ preventScroll: false });
+          return;
+        }
+      } finally {
+        btn.disabled = false;
+      }
+
+      if (input) {
+        input.focus({ preventScroll: false });
+        try {
+          input.select?.();
+        } catch (_) {}
+      }
+      const coarse =
+        window.matchMedia("(pointer: coarse)").matches ||
+        navigator.maxTouchPoints > 0;
+      showHint(
+        coarse
+          ? "Long-press the link field, then tap Paste."
+          : "Clipboard blocked — paste into the link field (Ctrl/⌘+V).",
+      );
+    },
+    true,
+  );
+
   const parseYouTubeId = (raw) => {
     const s = String(raw || "").trim();
     if (/^[\w-]{11}$/.test(s)) return s;
