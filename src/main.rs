@@ -273,7 +273,7 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preload" href="/themes.css" as="style" />
-<link rel="preload" href="/css/youtubetotext.css?v=r2" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r3" as="style" />
 <link rel="stylesheet" href="/themes.css" />
 <script type="module" src="/js/youtubetotext.js?v=5"></script>
 "##;
@@ -290,9 +290,9 @@ fn seo_kit() -> SeoKit {
             "YouTubeForge turns a YouTube URL into a searchable, downloadable transcript. \
              Copy as text or Markdown, export SRT/VTT/JSON, translate captions, download audio, \
              and trim sections. No account.",
-        )
-        .with_default_json_ld()
-        .push_json_ld(crate::landing::home_structured_data());
+        );
+    // JSON-LD is set via `with_json_ld` as one `@graph` object (not a JSON array),
+    // so naive crawlers that miss `[{...},{...}]` still count structured data.
     kit.theme_color = Some("#14090a".into());
     kit.author = "YouTubeForge".into();
     kit.llms_sections = vec![
@@ -302,7 +302,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text and Spanish /youtube-a-texto (audio, traductor, resumen, srt). /privacy /terms /pricing /api /extension.".into(),
+            "/youtube-to-text and Spanish /youtube-a-texto (audio, traductor, resumen, srt). /privacy /terms /extension.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -330,13 +330,14 @@ async fn main() -> std::io::Result<()> {
         .with_og_image("/og.png")
         .with_head(head)
         .with_seo_kit(seo_kit())
+        .with_json_ld(crate::landing::home_structured_data_str())
         .with_html_theme(
             HtmlTheme::new(["studio"])
                 .dark(["studio"])
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r2")
+        .with_stylesheet("/css/youtubetotext.css?v=r3")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -350,14 +351,14 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-13".into(),
+            cache_version: "yf-14".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("Y".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r2".into(),
+                "/css/youtubetotext.css?v=r3".into(),
                 "/js/youtubetotext.js?v=5".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
@@ -380,6 +381,8 @@ async fn main() -> std::io::Result<()> {
             "/youtube-to-mp3",
             get(|| async { Redirect::permanent("/youtube-to-audio") }),
         )
+        .route("/api", get(|| async { Redirect::permanent("/") }))
+        .route("/pricing", get(|| async { Redirect::permanent("/") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))

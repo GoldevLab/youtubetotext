@@ -157,6 +157,115 @@ pub fn check_headers(headers: &HeaderMap, limit: Limit) -> Result<(), String> {
     }
 }
 
+/// Site UI + optional server key. Rejects anonymous third-party scrapers.
+pub fn check_app_access(headers: &HeaderMap, limit: Limit) -> Result<(), String> {
+    if !(is_same_site_request(headers) || is_pro_headers(headers)) {
+        return Err(hidden_message());
+    }
+    check_headers(headers, limit)
+}
+
+/// Extension ingest from YouTube tabs (cross-origin) or same-site.
+pub fn check_ingest_access(headers: &HeaderMap) -> Result<(), String> {
+    if !(is_same_site_request(headers)
+        || is_extension_or_youtube_origin(headers)
+        || is_pro_headers(headers))
+    {
+        return Err(hidden_message());
+    }
+    check_headers(headers, INGEST)
+}
+
+pub fn hidden_message() -> String {
+    "Not found.".into()
+}
+
+fn site_origin() -> String {
+    crate::family::public_origin()
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn origin_host(origin: &str) -> Option<String> {
+    let u = url::Url::parse(origin).ok()?;
+    Some(u.host_str()?.to_ascii_lowercase())
+}
+
+fn is_our_origin(origin: &str) -> bool {
+    let site = site_origin();
+    if origin.eq_ignore_ascii_case(&site) {
+        return true;
+    }
+    // Allow localhost when developing against SITE_URL production.
+    matches!(
+        origin_host(origin).as_deref(),
+        Some("localhost") | Some("127.0.0.1")
+    ) && site.contains("localhost")
+}
+
+pub fn is_same_site_request(headers: &HeaderMap) -> bool {
+    if let Some(site) = header_str(headers, "sec-fetch-site") {
+        let s = site.to_ascii_lowercase();
+        if s == "same-origin" || s == "same-site" {
+            return true;
+        }
+        // Browser navigations / downloads sometimes send "none".
+        if s == "none" {
+            if let Some(origin) = header_str(headers, "origin") {
+                return is_our_origin(&origin);
+            }
+            if let Some(referer) = header_str(headers, "referer") {
+                return referer_is_ours(&referer);
+            }
+            // Top-level GET from the address bar — not our UI.
+            return false;
+        }
+    }
+    if let Some(origin) = header_str(headers, "origin") {
+        return is_our_origin(&origin);
+    }
+    if let Some(referer) = header_str(headers, "referer") {
+        return referer_is_ours(&referer);
+    }
+    false
+}
+
+fn referer_is_ours(referer: &str) -> bool {
+    let site = site_origin();
+    referer.starts_with(&site)
+        || referer.starts_with(&format!("{site}/"))
+        || referer.to_ascii_lowercase().starts_with("http://localhost")
+        || referer.to_ascii_lowercase().starts_with("http://127.0.0.1")
+}
+
+fn is_extension_or_youtube_origin(headers: &HeaderMap) -> bool {
+    let Some(origin) = header_str(headers, "origin") else {
+        return false;
+    };
+    let lower = origin.to_ascii_lowercase();
+    if lower.starts_with("chrome-extension://") || lower.starts_with("moz-extension://") {
+        return true;
+    }
+    matches!(
+        origin_host(&origin).as_deref(),
+        Some("youtube.com")
+            | Some("www.youtube.com")
+            | Some("m.youtube.com")
+            | Some("music.youtube.com")
+            | Some("youtu.be")
+    )
+}
+
+/// CORS allowlist for preflight / ingest responses.
+pub fn cors_allow_origin(headers: &HeaderMap) -> Option<String> {
+    let origin = header_str(headers, "origin")?;
+    if is_our_origin(&origin) || is_extension_or_youtube_origin(headers) {
+        Some(origin)
+    } else {
+        None
+    }
+}
+
 pub fn honeypot_tripped(value: Option<&str>) -> bool {
     value.is_some_and(|s| !s.trim().is_empty())
 }
@@ -241,5 +350,19 @@ mod tests {
         assert!(allow(&ip, lim));
         assert!(allow(&ip, lim));
         assert!(!allow(&ip, lim));
+    }
+
+    #[test]
+    fn same_site_sec_fetch() {
+        let mut h = HeaderMap::new();
+        h.insert("sec-fetch-site", "same-origin".parse().unwrap());
+        assert!(is_same_site_request(&h));
+    }
+
+    #[test]
+    fn rejects_bare_curl() {
+        let h = HeaderMap::new();
+        assert!(!is_same_site_request(&h));
+        assert!(check_app_access(&h, API).is_err());
     }
 }

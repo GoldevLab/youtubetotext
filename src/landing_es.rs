@@ -133,7 +133,7 @@ const SUMMARY: Landing = Landing {
     why: [
         ("Puedes revisar las cues", "Cada frase del recap es un trozo del texto que tienes debajo."),
         ("Los capítulos importan", "Una clase de 2 horas no es un párrafo. Partimos por capítulos del creador."),
-        ("Tú eliges el modelo", "No medimos un API de resumen. Los prompts se copian aquí."),
+        ("Tú eliges el modelo", "No medimos un resumen de pago. Los prompts se copian aquí."),
         ("Sigue en la misma app", "Después: SRT, traducción o audio."),
     ],
     examples_title: "Intenciones distintas de “resumir”",
@@ -169,7 +169,7 @@ const SRT: Landing = Landing {
         ("Los reproductores quieren archivos", "Pegar en un doc no es un subtítulo. SRT sí."),
         ("VTT para la web", "Para <video> HTML5 baja VTT, no TXT."),
         ("Recorta y exporta", "Salta intro o marca dos líneas; el archivo solo lleva ese rango."),
-        ("También API", "GET /api/transcript?v=…&fmt=srt para scripts. Con clave, más cuota."),
+        ("Sin cuenta extra", "Cuando las cues ya están en la página, copias y descargas usan lo que ves."),
     ],
     examples_title: "Trabajos de subtítulo",
     examples: [
@@ -181,7 +181,7 @@ const SRT: Landing = Landing {
     faq: [
         ("¿SRT o VTT?", "SRT es el clásico de editores. VTT es el estándar web. Salen de las mismas cues."),
         ("¿UTF-8?", "Sí. Úsalo en pistas que no son inglés."),
-        ("¿JSON?", "Sí: fmt=json en la API o el botón JSON."),
+        ("¿JSON?", "Sí: el botón JSON en la app."),
         ("¿Edit cambia el SRT?", "Las descargas de la página usan las cues que ves, con ediciones locales."),
         ("¿Tope de cues?", "Rechazamos ingestos absurdos; un video normal cabe."),
     ],

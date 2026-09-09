@@ -15,8 +15,6 @@ pub fn contact_line() -> View {
                     <a href="https://github.com/GoldevLab/youtubetotext/issues" rel="noopener">"GitHub"</a>
                     ". "
                     <NavLink href="/terms">"Terms"</NavLink>
-                    " · "
-                    <NavLink href="/pricing">"API"</NavLink>
                     "."
                 </p>
             }
@@ -27,8 +25,6 @@ pub fn contact_line() -> View {
                 <a href="https://github.com/GoldevLab/youtubetotext/issues" rel="noopener">"open an issue on GitHub"</a>
                 " (set CONTACT_EMAIL on the server to show a mailbox). "
                 <NavLink href="/terms">"Terms"</NavLink>
-                " · "
-                <NavLink href="/pricing">"API"</NavLink>
                 "."
             </p>
         },

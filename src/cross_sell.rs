@@ -63,8 +63,6 @@ pub fn seo_footer_links() -> View {
             <span aria-hidden="true">" · "</span>
             <NavLink href="/terms">"Terms"</NavLink>
             <span aria-hidden="true">" · "</span>
-            <NavLink href="/pricing">"API"</NavLink>
-            <span aria-hidden="true">" · "</span>
             <NavLink href="/extension">"Extension"</NavLink>
         </nav>
     }

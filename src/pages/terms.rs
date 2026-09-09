@@ -23,18 +23,12 @@ pub fn page(_req: FlowRequest) -> View {
             <p>
                 "Only paste public videos. Only download a personal copy when you are allowed to keep one (your video, a license, or a use the law permits). Do not use this app as a piracy mirror, a bulk scraper, or a way to bypass age, region, or login walls."
             </p>
-            <h2>"API"</h2>
-            <p>
-                "GET /api/transcript is free with a per-IP cap. A key in FORGE_API_KEYS (header X-Api-Key or Authorization: Bearer) raises that cap for scripts. Keys are not a license to ignore YouTube’s rules or copyright."
-            </p>
             <h2>"Ads and availability"</h2>
             <p>
-                "The tool is free. Ads may appear. We do not promise uptime, completeness, or that every public video will resolve. Results at /?v= are working URLs and stay noindex."
+                "The tool is free in the browser. Ads may appear. We do not promise uptime, completeness, or that every public video will resolve. Results at /?v= are working URLs and stay noindex."
             </p>
             <p>
                 <NavLink href="/privacy">"Privacy"</NavLink>
-                " · "
-                <NavLink href="/pricing">"API pricing"</NavLink>
             </p>
         </main>
     }

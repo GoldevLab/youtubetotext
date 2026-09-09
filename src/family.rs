@@ -177,14 +177,14 @@ const AUDIO: Landing = Landing {
     howto_title: "How to save YouTube audio",
     howto: [
         ("Paste the watch URL", "Same links as the transcript tool. The app requests an audio-only stream, not a muxed 1080p file."),
-        ("Download the file", "Format defaults to MP3. Switch to M4A, Opus, or WAV if you need them. The file comes through /api/audio."),
+        ("Download the file", "Format defaults to MP3. Switch to M4A, Opus, or WAV if you need them."),
         ("Do the next job", "When the file is ready, jump to transcript, SRT, translation, or a chapter summary without pasting again."),
     ],
     why_title: "Why this is not a generic “YouTube MP3” clone",
     why: [
         ("Audio-only streams", "We prefer adaptive audio (itag 140/251 class) so you are not downloading video pixels."),
         ("Same family as captions", "After audio, one click to text, SRT, or a summary — one session, several intents."),
-        ("No ffmpeg.wasm on the landing", "The SEO page stays light. Heavy work is the app + a streaming API."),
+        ("No ffmpeg.wasm on the landing", "The SEO page stays light. Heavy work happens in the app after you paste."),
         ("Honest failures", "If YouTube only returns a signature-cipher URL we cannot decode, we say so. We do not pretend every video is downloadable."),
     ],
     examples_title: "When audio-only is the right intent",
@@ -254,7 +254,7 @@ const SUMMARY: Landing = Landing {
     why: [
         ("You can check the cues", "Every claim in the recap is a slice of the transcript you can open underneath."),
         ("Chapters matter", "A 2-hour lecture is not one paragraph. We split on creator chapters when they exist."),
-        ("You keep the model", "We do not lock summaries behind our API meter. Prompts are local copy."),
+        ("You keep the model", "We do not lock summaries behind a paywall. Prompts are local copy."),
         ("Same tool family", "After the recap: download SRT, translate, or grab audio."),
     ],
     examples_title: "Summary intents that are actually different",
@@ -290,7 +290,7 @@ const SRT: Landing = Landing {
         ("Players want files", "Copy-paste into a doc is not a subtitle. SRT is."),
         ("VTT for the web", "If you are adding captions to HTML5 video, download VTT, not TXT."),
         ("Trim then export", "Skip intro/outro or click two lines; the file only includes the range you kept."),
-        ("API too", "GET /api/transcript?v=…&fmt=srt for scripts."),
+        ("Works offline after load", "Once cues are on the page, copy and download use what you see — no extra round trip for TXT/SRT/VTT."),
     ],
     examples_title: "Subtitle jobs this page targets",
     examples: [
@@ -302,7 +302,7 @@ const SRT: Landing = Landing {
     faq: [
         ("SRT vs VTT?", "SRT is the classic editor/player format. VTT is the web standard (WEBVTT). We offer both from the same cues."),
         ("UTF-8?", "Yes. Use it for non-English tracks."),
-        ("Can I get JSON instead?", "Yes — fmt=json on the API, or the JSON button in the app."),
+        ("Can I get JSON instead?", "Yes — use the JSON download button in the app."),
         ("Does Edit mode affect the SRT?", "Downloads from the on-page buttons use the cues you see, including local edits."),
         ("Is there a cue limit?", "We refuse absurd ingest sizes; normal videos are fine."),
     ],

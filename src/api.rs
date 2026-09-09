@@ -1,4 +1,5 @@
-//! Public JSON/text transcript API.
+//! App JSON endpoints used by the site UI (and the optional browser extension).
+//! Not a documented public API — callers must be same-site or present a server key.
 
 use axum::body::Body;
 use axum::extract::Query;
@@ -26,8 +27,8 @@ pub struct ApiQuery {
 }
 
 pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl IntoResponse {
-    if let Err(m) = guard::check_headers(&headers, guard::API) {
-        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    if let Err(m) = guard::check_app_access(&headers, guard::API) {
+        return json_error(StatusCode::NOT_FOUND, &m);
     }
     let raw = q
         .v
@@ -108,8 +109,8 @@ pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl I
 }
 
 pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
-    if let Err(m) = guard::check_headers(&headers, guard::AUDIO) {
-        return json_error(StatusCode::TOO_MANY_REQUESTS, &m).into_response();
+    if let Err(m) = guard::check_app_access(&headers, guard::AUDIO) {
+        return json_error(StatusCode::NOT_FOUND, &m).into_response();
     }
     let raw = q
         .v
@@ -158,8 +159,8 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
 }
 
 pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
-    if let Err(m) = guard::check_headers(&headers, guard::VIDEO) {
-        return json_error(StatusCode::TOO_MANY_REQUESTS, &m).into_response();
+    if let Err(m) = guard::check_app_access(&headers, guard::VIDEO) {
+        return json_error(StatusCode::NOT_FOUND, &m).into_response();
     }
     let raw = q
         .v
@@ -229,8 +230,8 @@ pub struct IngestBody {
 
 /// Translate already-loaded cues so Apply does not re-download from YouTube.
 pub async fn translate(headers: HeaderMap, Json(body): Json<TranslateBody>) -> impl IntoResponse {
-    if let Err(m) = guard::check_headers(&headers, guard::TRANSLATE) {
-        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    if let Err(m) = guard::check_app_access(&headers, guard::TRANSLATE) {
+        return json_error(StatusCode::NOT_FOUND, &m);
     }
     let tlang = body.tlang.as_deref().unwrap_or("").trim();
     if tlang.is_empty() {
@@ -272,8 +273,8 @@ pub struct TranslateBody {
 
 /// Captions fetched in the user's browser (extension) — bypasses server IP blocks.
 pub async fn ingest(headers: HeaderMap, Json(body): Json<IngestBody>) -> impl IntoResponse {
-    if let Err(m) = guard::check_headers(&headers, guard::INGEST) {
-        return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+    if let Err(m) = guard::check_ingest_access(&headers) {
+        return json_error_cors(StatusCode::NOT_FOUND, &m, &headers);
     }
     match ingest_client_doc(
         body.video_id,
@@ -288,22 +289,26 @@ pub async fn ingest(headers: HeaderMap, Json(body): Json<IngestBody>) -> impl In
         Ok(doc) => {
             let payload = serde_json::json!({ "ok": true, "video_id": doc.video_id, "cues": doc.cues.len() })
                 .to_string();
-            file_response(
+            file_response_cors(
                 StatusCode::OK,
                 "application/json; charset=utf-8",
                 None,
                 payload,
                 false,
+                Some(&headers),
             )
         }
         Err(e) => {
             let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_REQUEST);
-            json_error(status, &e.message)
+            json_error_cors(status, &e.message, &headers)
         }
     }
 }
 
-pub async fn gate(Json(body): Json<GateBody>) -> impl IntoResponse {
+pub async fn gate(headers: HeaderMap, Json(body): Json<GateBody>) -> impl IntoResponse {
+    if let Err(m) = guard::check_app_access(&headers, guard::PAGE) {
+        return json_error(StatusCode::NOT_FOUND, &m);
+    }
     match crate::guard::verify_turnstile(body.token.as_deref()).await {
         Ok(()) => file_response(
             StatusCode::OK,
@@ -321,10 +326,10 @@ pub struct GateBody {
     pub token: Option<String>,
 }
 
-pub async fn preflight() -> impl IntoResponse {
-    let mut headers = HeaderMap::new();
-    cors_headers(&mut headers);
-    (StatusCode::NO_CONTENT, headers)
+pub async fn preflight(headers: HeaderMap) -> impl IntoResponse {
+    let mut out = HeaderMap::new();
+    cors_headers_for(&headers, &mut out);
+    (StatusCode::NO_CONTENT, out)
 }
 
 fn prefers_html(headers: &HeaderMap) -> bool {
@@ -352,6 +357,22 @@ fn json_error(status: StatusCode, message: &str) -> (StatusCode, HeaderMap, Stri
     file_response(status, "application/json; charset=utf-8", None, body, false)
 }
 
+fn json_error_cors(
+    status: StatusCode,
+    message: &str,
+    req: &HeaderMap,
+) -> (StatusCode, HeaderMap, String) {
+    let body = serde_json::json!({ "error": message }).to_string();
+    file_response_cors(
+        status,
+        "application/json; charset=utf-8",
+        None,
+        body,
+        false,
+        Some(req),
+    )
+}
+
 fn file_response(
     status: StatusCode,
     content_type: &str,
@@ -359,16 +380,29 @@ fn file_response(
     body: String,
     cacheable: bool,
 ) -> (StatusCode, HeaderMap, String) {
+    file_response_cors(status, content_type, filename, body, cacheable, None)
+}
+
+fn file_response_cors(
+    status: StatusCode,
+    content_type: &str,
+    filename: Option<&str>,
+    body: String,
+    cacheable: bool,
+    req_headers: Option<&HeaderMap>,
+) -> (StatusCode, HeaderMap, String) {
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_str(content_type).unwrap_or(HeaderValue::from_static("text/plain")),
     );
-    cors_headers(&mut headers);
+    if let Some(req) = req_headers {
+        cors_headers_for(req, &mut headers);
+    }
     headers.insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static(if cacheable {
-            "public, max-age=120"
+            "private, max-age=120"
         } else {
             "no-store"
         }),
@@ -381,17 +415,23 @@ fn file_response(
     (status, headers, body)
 }
 
-fn cors_headers(headers: &mut HeaderMap) {
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        HeaderValue::from_static("*"),
-    );
+fn cors_headers_for(req: &HeaderMap, headers: &mut HeaderMap) {
+    let Some(origin) = guard::cors_allow_origin(req) else {
+        return;
+    };
+    if let Ok(v) = HeaderValue::from_str(&origin) {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
+    }
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
         HeaderValue::from_static("GET, POST, OPTIONS"),
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        HeaderValue::from_static("content-type"),
+        HeaderValue::from_static("content-type, x-api-key, authorization"),
+    );
+    headers.insert(
+        header::VARY,
+        HeaderValue::from_static("Origin"),
     );
 }

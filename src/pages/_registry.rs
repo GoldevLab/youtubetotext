@@ -21,8 +21,6 @@ impl FlowPageRegistry for PagesRegistry {
             ("/youtube-a-srt", "youtube_a_srt"),
             ("/privacy", "privacy"),
             ("/terms", "terms"),
-            ("/pricing", "pricing"),
-            ("/api", "api"),
             ("/extension", "extension"),
         ]
     }
@@ -48,8 +46,6 @@ impl FlowPageRegistry for PagesRegistry {
             "youtube_a_srt" => Some(super::youtube_a_srt::page(req)),
             "privacy" => Some(super::privacy::page(req)),
             "terms" => Some(super::terms::page(req)),
-            "pricing" => Some(super::pricing::page(req)),
-            "api" => Some(super::api::page(req)),
             "extension" => Some(super::extension::page(req)),
             _ => None,
         }

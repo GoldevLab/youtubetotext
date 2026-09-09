@@ -29,12 +29,31 @@ pub fn web_application_json_ld() -> Value {
     })
 }
 
-/// Single `@graph` blob so crawlers that skip JSON arrays still see Software + FAQ + HowTo.
+/// Single Schema.org document (not a JSON array). Monitor and similar crawlers
+/// often miss arrays / nested graphs inside `[...]`.
 pub fn home_structured_data() -> Value {
     let origin = crate::family::public_origin();
     json!({
         "@context": "https://schema.org",
         "@graph": [
+            {
+                "@type": "Organization",
+                "@id": format!("{origin}/#org"),
+                "name": "YouTubeForge",
+                "url": origin
+            },
+            {
+                "@type": "WebSite",
+                "@id": format!("{origin}/#website"),
+                "name": "YouTubeForge",
+                "url": origin,
+                "publisher": {"@id": format!("{origin}/#org")},
+                "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": format!("{origin}/?v={{search_term_string}}"),
+                    "query-input": "required name=search_term_string"
+                }
+            },
             web_application_json_ld(),
             {
                 "@type": "HowTo",
@@ -102,6 +121,10 @@ pub fn home_structured_data() -> Value {
             }
         ]
     })
+}
+
+pub fn home_structured_data_str() -> String {
+    serde_json::to_string(&home_structured_data()).unwrap_or_else(|_| "{}".into())
 }
 
 pub fn seo_landing(mode: Mode) -> View {

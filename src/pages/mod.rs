@@ -1,7 +1,5 @@
-pub mod api;
 pub mod extension;
 pub mod index;
-pub mod pricing;
 pub mod privacy;
 pub mod terms;
 pub mod youtube_a_mp3;

@@ -40,7 +40,7 @@ pub fn page(_req: FlowRequest) -> View {
             <ol class="howto-grid">
                 <li>
                     <h3>"Watch page button"</h3>
-                    <p>"Get transcript fetches captions in your browser and posts them to /api/ingest, then opens the result."</p>
+                    <p>"Get transcript fetches captions in your browser, sends them to YouTubeForge, then opens the result."</p>
                 </li>
                 <li>
                     <h3>"Toolbar click"</h3>

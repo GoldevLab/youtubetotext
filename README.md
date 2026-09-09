@@ -2,7 +2,7 @@
 
 Free YouTube transcripts, audio, SRT, translation, and summaries. Built with [Resuma](https://resuma-docs.fly.dev/).
 
-A cleaner competitor to [YouTubeToTranscript](https://youtubetotranscript.com/): searchable lines, real SRT/VTT downloads, shareable URLs, translation, and a free HTTP API. No account, no cookie wall.
+A cleaner competitor to [YouTubeToTranscript](https://youtubetotranscript.com/): searchable lines, real SRT/VTT downloads, shareable URLs, and translation. No account, no cookie wall.
 
 Live: [forgeyt.com](https://forgeyt.com) (also [youtubetotext.fly.dev](https://youtubetotext.fly.dev))
 
@@ -24,8 +24,6 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/youtube-a-srt` | SRT / VTT (ES) |
 | `/privacy` | Privacy / AdSense |
 | `/terms` | Terms (captions, MP3, video) |
-| `/pricing` | API key / higher limits |
-| `/api` | API docs |
 | `/extension` | Chrome extension |
 
 `/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`.
@@ -33,11 +31,8 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
 - Download audio when YouTube exposes a plain audio URL
-- `GET /api/transcript?v=…&fmt=json|txt|srt|vtt|md`
 
-The public API and video loads are rate-limited per IP so scrapers cannot drain YouTube captions through this app. Optional Cloudflare Turnstile: set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` on Fly.
-
-Optional `X-Api-Key` or `Authorization: Bearer` matching `FORGE_API_KEYS` (comma-separated, each ≥16 chars) or `API_KEY` raises the per-minute caps (about 240 transcript / 80 audio / 40 video). Request a key from the mailbox in `CONTACT_EMAIL`, or GitHub issues if that env is unset. No Stripe checkout on the site.
+Internal app routes under `/api/*` power the UI only (same-site). They are not a public developer API. Optional Cloudflare Turnstile: set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` on Fly.
 
 ## Optional env (do not invent values)
 
@@ -47,8 +42,8 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 |---|---|
 | `SITE_URL` | Canonical origin |
 | `ADSENSE_CLIENT` / `ADSENSE_SLOT*` | Live ads + `/ads.txt` |
-| `FORGE_API_KEYS` or `API_KEY` | Higher API limits |
-| `CONTACT_EMAIL` | Shown on `/privacy` and `/pricing` |
+| `FORGE_API_KEYS` or `API_KEY` | Ops escape hatch for internal tooling |
+| `CONTACT_EMAIL` | Shown on `/privacy` |
 | `CHROME_STORE_URL` | Store button on `/extension` |
 | `GSC_VERIFICATION` | Search Console HTML meta tag (paste the content= value) |
 | `GA4_ID` (`G-…`) or `PLAUSIBLE_DOMAIN` | Analytics |

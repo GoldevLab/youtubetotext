@@ -249,7 +249,7 @@ pub fn home_search(mode: Mode) -> View {
             </Form>
             <div class="recents" data-recents="" hidden=""></div>
             <Modal id="media-dl" closedBy="any" class="dl-dialog">
-                <h2 id="ytt-home-vdl-title" data-dl-title="">"Your file is downloading"</h2>
+                <p id="ytt-home-vdl-title" class="dl-dialog-title" data-dl-title="">"Your file is downloading"</p>
                 <p data-dl-lead="">"The file will save to your downloads folder."</p>
                 {crate::ads::slot("home-video-dl", "rectangle")}
                 <form method="dialog">

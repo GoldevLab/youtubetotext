@@ -62,9 +62,9 @@ fn idle() -> View {
                 </ol>
             </section>
             <section class="features" aria-labelledby="jobs-title">
-                <h2 id="jobs-title">"Pick the job Google sent you for"</h2>
+                <h2 id="jobs-title">"Choose what you need from the video"</h2>
                 <p class="hint">
-                    "Each landing is a different task. The box on this page is the same tool."
+                    "Transcript, audio, translation, summary, or subtitles — same paste box, different outcome."
                 </p>
                 <ul class="feature-grid">
                     <li>
