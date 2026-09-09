@@ -363,18 +363,18 @@ async fn main() -> std::io::Result<()> {
     }
     app.with_public_dir(public)
         .with_pwa(FlowPwaConfig {
-            name: "YouTubeForge".into(),
-            short_name: "Yf".into(),
+            name: "ForgeYT".into(),
+            short_name: "ForgeYT".into(),
             description: "YouTube transcripts, audio, SRT, translation, and summaries.".into(),
             theme_color: "#14090a".into(),
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-20".into(),
+            cache_version: "yf-21".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
-            icon_char: Some("Y".into()),
+            icon_char: Some("F".into()),
             precache_paths: vec![
                 "/themes.css".into(),
                 "/css/youtubetotext.css?v=r4".into(),
@@ -390,7 +390,7 @@ async fn main() -> std::io::Result<()> {
                 url: "/".into(),
             }],
             offline_title: "You're offline".into(),
-            offline_message: "YouTubeForge needs a connection to fetch captions and downloads. Reconnect and try again.".into(),
+            offline_message: "ForgeYT needs a connection to fetch captions and downloads. Reconnect and try again.".into(),
             manifest_icons: Vec::new(),
         })
         .route("/app/youtube", get(redirect_app_youtube))
