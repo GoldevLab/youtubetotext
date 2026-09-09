@@ -127,6 +127,16 @@ pub fn home_structured_data_str() -> String {
     serde_json::to_string(&home_structured_data()).unwrap_or_else(|_| "{}".into())
 }
 
+/// Plain JSON-LD script (no CSP nonce). Monitor and similar crawlers often miss
+/// `type="application/ld+json" nonce="…"` because their regex expects `">` right after the type.
+pub fn home_json_ld_script() -> String {
+    let safe = home_structured_data_str()
+        .replace('<', "\\u003c")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029");
+    format!(r#"<script type="application/ld+json">{safe}</script>"#)
+}
+
 pub fn seo_landing(mode: Mode) -> View {
     render_landing(mode, landing_for(mode), false)
 }

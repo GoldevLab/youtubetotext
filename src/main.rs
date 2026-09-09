@@ -291,8 +291,7 @@ fn seo_kit() -> SeoKit {
              Copy as text or Markdown, export SRT/VTT/JSON, translate captions, download audio, \
              and trim sections. No account.",
         );
-    // JSON-LD is set via `with_json_ld` as one `@graph` object (not a JSON array),
-    // so naive crawlers that miss `[{...},{...}]` still count structured data.
+    // JSON-LD goes in `head` without a nonce so naive crawlers detect it.
     kit.theme_color = Some("#14090a".into());
     kit.author = "YouTubeForge".into();
     kit.llms_sections = vec![
@@ -313,7 +312,12 @@ fn seo_kit() -> SeoKit {
 async fn main() -> std::io::Result<()> {
     // `with_seo_kit` owns keywords/author/theme-color meta, JSON-LD, and the
     // `/robots.txt` + `/llms.txt` routes (AI crawler policy included).
-    let head = format!("{HEAD}{}{}", ads::head_snippet(), crate::site::head_extras());
+    let head = format!(
+        "{HEAD}{}{}{}",
+        crate::landing::home_json_ld_script(),
+        ads::head_snippet(),
+        crate::site::head_extras()
+    );
     let ads_txt = ads::ads_txt().map(|s| -> &'static [u8] {
         Box::leak(s.into_bytes().into_boxed_slice())
     });
@@ -330,7 +334,6 @@ async fn main() -> std::io::Result<()> {
         .with_og_image("/og.png")
         .with_head(head)
         .with_seo_kit(seo_kit())
-        .with_json_ld(crate::landing::home_structured_data_str())
         .with_html_theme(
             HtmlTheme::new(["studio"])
                 .dark(["studio"])
