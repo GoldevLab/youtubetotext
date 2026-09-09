@@ -1026,7 +1026,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                         <span>{kind_note}</span>
                     </p>
                     <p class="vid-stats">{stats}</p>
-                    <p>
+                    <p class="player-links">
                         <a class="btn btn-ghost" href={watch} target="_blank" rel="noreferrer noopener">"Open on YouTube"</a>
                         <NavLink href={share} class="btn btn-ghost">"Shareable transcript"</NavLink>
                     </p>

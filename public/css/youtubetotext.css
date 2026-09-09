@@ -1131,6 +1131,19 @@ select:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.player-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.65rem 0 0;
+}
+
+.player-links .btn {
+  flex: 1 1 11rem;
+  justify-content: center;
+  min-width: 0;
+}
+
 .chapters {
   margin-top: 0.8rem;
 }
