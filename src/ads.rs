@@ -77,14 +77,16 @@ fn slot_id(placement: &str, size: &str) -> Option<String> {
 }
 
 pub fn head_snippet() -> String {
+    // Load AdSense after first paint (injected by youtubetotext-ads.js) so it
+    // does not compete with LCP/FCP on mobile. Keep dns-prefetch only.
     match client_id() {
         Some(id) => format!(
-            r#"<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin="anonymous" />
-<link rel="preconnect" href="https://googleads.g.doubleclick.net" crossorigin="anonymous" />
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={id}" crossorigin="anonymous"></script>
-<script type="module" src="/js/youtubetotext-ads.js"></script>"#
+            r#"<link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+<link rel="dns-prefetch" href="https://googleads.g.doubleclick.net" />
+<meta name="ytt-adsense-client" content="{id}" />
+<script type="module" src="/js/youtubetotext-ads.js?v=2"></script>"#
         ),
-        None => r#"<script type="module" src="/js/youtubetotext-ads.js"></script>"#.into(),
+        None => r#"<script type="module" src="/js/youtubetotext-ads.js?v=2"></script>"#.into(),
     }
 }
 
@@ -94,13 +96,12 @@ pub fn ads_txt() -> Option<String> {
     Some(format!("google.com, {pub_id}, DIRECT, f08c47fec0942fa0\n"))
 }
 
-/// Allow YouTube embeds + AdSense. Resuma 1.3.1 has no `frame-src` knob, so the
-/// policy stays report-only: enforcing `default-src 'self'` would blank the
-/// player and the ad iframes. Host allowlists are still emitted so a later
-/// Resuma with `frame-src` can enforce without another app change.
+/// Allow YouTube embeds + AdSense. Published Resuma still lacks `frame-src`, so
+/// CSP stays report-only: enforcing `default-src 'self'` would blank ad/player
+/// iframes. Host allowlists are emitted for the day `frame-src` ships.
 pub fn apply_csp(csp: &mut CspConfig) {
-    // `'strict-dynamic'` ignores host allowlists; adsbygoogle.js in `<head>`
-    // is not nonce'd by Resuma, so it would never run.
+    // `'strict-dynamic'` ignores host allowlists; adsbygoogle.js is injected
+    // without a Resuma nonce, so host allowlists must remain effective.
     csp.strict_dynamic = false;
     for origin in YOUTUBE_ORIGINS.iter().chain(ADSENSE_ORIGINS) {
         push_unique(&mut csp.script_src, origin);

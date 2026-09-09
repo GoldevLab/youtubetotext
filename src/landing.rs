@@ -7,16 +7,100 @@ use crate::family::{canonical_url, landing_for, Mode};
 use crate::tool::home_search;
 
 pub fn web_application_json_ld() -> Value {
+    let origin = crate::family::public_origin();
+    json!({
+        "@type": "WebApplication",
+        "@id": format!("{origin}/#app"),
+        "name": "YouTubeForge",
+        "alternateName": ["YouTube transcript", "YouTube to text", "YouTube to SRT"],
+        "url": origin,
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript",
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+        "featureList": [
+            "Searchable YouTube transcripts",
+            "Download SRT and VTT captions",
+            "Translate captions",
+            "Download audio (MP3/M4A)",
+            "Chapter-style summary from captions"
+        ],
+        "description": "Free YouTube transcript tool: search, download SRT/VTT, translate captions, save audio. No account."
+    })
+}
+
+/// Single `@graph` blob so crawlers that skip JSON arrays still see Software + FAQ + HowTo.
+pub fn home_structured_data() -> Value {
+    let origin = crate::family::public_origin();
     json!({
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "YouTubeForge",
-        "alternateName": ["YouTube transcript", "YouTube to text"],
-        "url": crate::family::public_origin(),
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "Web",
-        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-        "description": "Free YouTube transcript tool: search, download SRT/VTT, translate captions, save audio. No account."
+        "@graph": [
+            web_application_json_ld(),
+            {
+                "@type": "HowTo",
+                "name": "Get a YouTube transcript with YouTubeForge",
+                "description": "Paste a public YouTube URL and read, search, or download the captions.",
+                "totalTime": "PT1M",
+                "step": [
+                    {
+                        "@type": "HowToStep",
+                        "position": 1,
+                        "name": "Paste the link",
+                        "text": "Paste a YouTube watch URL, Shorts link, youtu.be link, or video id into the box on forgeyt.com."
+                    },
+                    {
+                        "@type": "HowToStep",
+                        "position": 2,
+                        "name": "Open the transcript",
+                        "text": "Submit the form to load public captions as searchable text with timestamps."
+                    },
+                    {
+                        "@type": "HowToStep",
+                        "position": 3,
+                        "name": "Copy or download",
+                        "text": "Copy the text, or download TXT, SRT, VTT, Markdown, or JSON. Optional: translate, summarize, or save audio."
+                    }
+                ]
+            },
+            {
+                "@type": "FAQPage",
+                "@id": format!("{origin}/#faq"),
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": "Is YouTubeForge free to use?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Yes. No account, no sign-up. Public YouTube captions are extracted as-is. Ads may appear around the tool."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "How do I access the transcript after generating it?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Every result lives on the home URL with v= and mode=text. Optional query params: lang, tlang, and mode (audio, translate, summary, srt)."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Can I download the transcript?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON. Copy and Copy Markdown are also available."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "Is there a limit to the length of the video?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."
+                        }
+                    }
+                ]
+            }
+        ]
     })
 }
 

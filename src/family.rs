@@ -102,6 +102,11 @@ pub fn canonical_url(path: &str) -> String {
     format!("{}{path}", public_origin())
 }
 
+/// Homepage `<title>` — keep under ~55 chars for SERP truncation.
+pub const HOME_TITLE: &str = "Free YouTube Transcript & SRT | YouTubeForge";
+pub const HOME_DESCRIPTION: &str =
+    "Paste a YouTube link. Get a searchable transcript, download SRT/VTT, translate captions, or save audio. Free, no account.";
+
 pub struct Landing {
     pub title: &'static str,
     pub description: &'static str,

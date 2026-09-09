@@ -1,11 +1,11 @@
-@import url("/themes.css");
+/* themes.css is linked separately in <head> (avoid @import CRP chain). */
 
 @font-face {
-  font-family: "Roboto Fallback";
-  src: local("Arial"), local("Helvetica Neue"), local("Helvetica");
-  size-adjust: 100.06%;
-  ascent-override: 92.67%;
-  descent-override: 24.41%;
+  font-family: "Yf UI";
+  src: local("Segoe UI"), local("Helvetica Neue"), local("Arial"), local("Noto Sans");
+  size-adjust: 100%;
+  ascent-override: 95%;
+  descent-override: 25%;
   line-gap-override: 0%;
 }
 
@@ -83,7 +83,7 @@
   --copy-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13l4.2 4.2L19 7'/%3E%3C/svg%3E");
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 12 8'%3E%3Cpath stroke='%230f0f0f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1.5 1.8 6 6.2 10.5 1.8'/%3E%3C/svg%3E");
   --select-chevron-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 12 8'%3E%3Cpath stroke='%23fff4f2' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1.5 1.8 6 6.2 10.5 1.8'/%3E%3C/svg%3E");
-  --font: "Roboto", "Roboto Fallback", system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font: "Yf UI", system-ui, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --display: var(--font);
   --sans: var(--font);
   --max: 1180px;

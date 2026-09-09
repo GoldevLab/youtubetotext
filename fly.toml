@@ -18,8 +18,16 @@ primary_region = "dfw"
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 0
+  # Keep one warm machine so mobile FCP/LCP are not tanked by cold starts.
+  min_machines_running = 1
   processes = ["app"]
+
+  [http_service.http_options.response]
+    # Stop advertising Fly’s Server / Via fingerprints (monitor.works finding).
+    pristine = true
+
+  [http_service.http_options.response.headers]
+    X-Permitted-Cross-Domain-Policies = "none"
 
   [[http_service.checks]]
     grace_period = "20s"

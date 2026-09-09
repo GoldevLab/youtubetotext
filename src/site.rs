@@ -84,8 +84,29 @@ pub fn head_extras() -> String {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'-')
         {
             out.push_str(&format!(
-                r#"<script async src="https://www.googletagmanager.com/gtag/js?id={id}"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){{dataLayer.push(arguments);}}gtag('js',new Date());gtag('config','{id}');</script>"#
+                r#"<link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+<script>
+(function(){{
+  var id={id:?};
+  function load(){{
+    if(window.__yttGaLoaded)return;
+    window.__yttGaLoaded=1;
+    var s=document.createElement('script');
+    s.async=true;
+    s.src='https://www.googletagmanager.com/gtag/js?id='+id;
+    s.onload=function(){{
+      window.dataLayer=window.dataLayer||[];
+      function gtag(){{dataLayer.push(arguments);}}
+      window.gtag=gtag;
+      gtag('js',new Date());
+      gtag('config',id);
+    }};
+    document.head.appendChild(s);
+  }}
+  if('requestIdleCallback' in window)requestIdleCallback(load,{{timeout:3500}});
+  else window.addEventListener('load',function(){{setTimeout(load,1500);}});
+}})();
+</script>"#
             ));
         }
     }

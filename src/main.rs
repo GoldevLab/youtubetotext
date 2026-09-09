@@ -26,7 +26,6 @@ use serde::Deserialize;
 use pages::PagesRegistry;
 use resuma::prelude::*;
 use resuma::SeoKit;
-use serde_json::json;
 
 fn view_transition_name(path: &str) -> String {
     let slug = path.trim_matches('/');
@@ -273,10 +272,10 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icon.svg" type="image/svg+xml" />
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
-<script type="module" src="/js/youtubetotext.js?v=4"></script>
+<link rel="preload" href="/themes.css" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r2" as="style" />
+<link rel="stylesheet" href="/themes.css" />
+<script type="module" src="/js/youtubetotext.js?v=5"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -293,45 +292,7 @@ fn seo_kit() -> SeoKit {
              and trim sections. No account.",
         )
         .with_default_json_ld()
-        .push_json_ld(crate::landing::web_application_json_ld())
-        .push_json_ld(json!({
-            "@context": "https://schema.org",
-            "@type": "FAQPage",
-            "mainEntity": [
-                {
-                    "@type": "Question",
-                    "name": "Is YouTubeForge free to use?",
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": "Yes. No account, no sign-up. Public YouTube captions are extracted as-is."
-                    }
-                },
-                {
-                    "@type": "Question",
-                    "name": "How do I access the transcript after generating it?",
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": "Every transcript has a shareable URL at /?v={videoId}&mode=text. Optional query params: lang, tlang, and mode (audio, translate, summary, srt)."
-                    }
-                },
-                {
-                    "@type": "Question",
-                    "name": "Can I download the transcript?",
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": "Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON in one click. Copy and Copy Markdown are also available."
-                    }
-                },
-                {
-                    "@type": "Question",
-                    "name": "Is there a limit to the length of the video?",
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": "If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."
-                    }
-                }
-            ]
-        }));
+        .push_json_ld(crate::landing::home_structured_data());
     kit.theme_color = Some("#14090a".into());
     kit.author = "YouTubeForge".into();
     kit.llms_sections = vec![
@@ -363,10 +324,8 @@ async fn main() -> std::io::Result<()> {
     ads::apply_csp(&mut serve.security.csp);
 
     let mut app = FlowApp::new()
-        .with_title("YouTube transcript, audio, SRT and translation | YouTubeForge")
-        .with_description(
-            "Get a free YouTube transcript from any public video. Search, copy, download SRT/VTT/Markdown, translate captions. No cookie wall, no account.",
-        )
+        .with_title(crate::family::HOME_TITLE)
+        .with_description(crate::family::HOME_DESCRIPTION)
         .with_site_url(crate::family::public_origin())
         .with_og_image("/og.png")
         .with_head(head)
@@ -377,7 +336,7 @@ async fn main() -> std::io::Result<()> {
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r1")
+        .with_stylesheet("/css/youtubetotext.css?v=r2")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -391,15 +350,15 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-12".into(),
+            cache_version: "yf-13".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("Y".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r1".into(),
-                "/js/youtubetotext.js?v=4".into(),
+                "/css/youtubetotext.css?v=r2".into(),
+                "/js/youtubetotext.js?v=5".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
                 "/icons/icon-512.png".into(),

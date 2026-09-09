@@ -26,10 +26,8 @@ pub fn page(req: FlowRequest) -> View {
 }
 
 fn idle() -> View {
-    set_page_title("YouTube transcript, audio, SRT and translation | YouTubeForge");
-    set_page_description(
-        "Paste a YouTube link. Get a searchable transcript, then download audio, translate captions, summarize, or export SRT. Free, no account.",
-    );
+    set_page_title(crate::family::HOME_TITLE);
+    set_page_description(crate::family::HOME_DESCRIPTION);
     set_page_canonical(canonical_url("/"));
     view! {
         <main class="home-page">

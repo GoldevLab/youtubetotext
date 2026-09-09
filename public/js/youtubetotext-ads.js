@@ -1,4 +1,27 @@
-/** Request AdSense fills for reserved <ins> units. Dialogs wait until open. */
+/** Lazy-load AdSense after first paint, then fill reserved <ins> units. */
+
+function adsenseClient() {
+  const meta = document.querySelector('meta[name="ytt-adsense-client"]');
+  const id = meta?.getAttribute("content")?.trim();
+  return id && id.startsWith("ca-pub-") ? id : "";
+}
+
+function ensureAdsenseScript() {
+  const id = adsenseClient();
+  if (!id) return Promise.resolve(false);
+  if (document.querySelector('script[src*="adsbygoogle.js"]')) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.async = true;
+    s.crossOrigin = "anonymous";
+    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(id)}`;
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+}
 
 function pendingIns(scope, includeLazy) {
   const root = scope instanceof Element ? scope : document;
@@ -30,32 +53,35 @@ function fillAds(scope, includeLazy) {
   for (const ins of nodes) pushFill(ins);
 }
 
-function bootVisible() {
+async function bootVisible() {
+  await ensureAdsenseScript();
   fillAds(document, false);
 }
 
-function waitForAdsense(tries) {
-  if (Array.isArray(globalThis.adsbygoogle) || globalThis.adsbygoogle?.loaded) {
-    bootVisible();
-    return;
+function scheduleBoot() {
+  const run = () => {
+    bootVisible().catch(() => {});
+  };
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(run, { timeout: 2500 });
+  } else {
+    setTimeout(run, 1200);
   }
-  if (tries <= 0) {
-    bootVisible();
-    return;
-  }
-  setTimeout(() => waitForAdsense(tries - 1), 250);
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => waitForAdsense(20), { once: true });
+  document.addEventListener("DOMContentLoaded", scheduleBoot, { once: true });
 } else {
-  waitForAdsense(20);
+  scheduleBoot();
 }
 
 document.addEventListener("resuma:navigate", () => {
-  queueMicrotask(bootVisible);
-  requestAnimationFrame(bootVisible);
-  setTimeout(bootVisible, 400);
+  queueMicrotask(() => {
+    bootVisible().catch(() => {});
+  });
+  setTimeout(() => {
+    bootVisible().catch(() => {});
+  }, 400);
 });
 
 document.addEventListener(
@@ -63,11 +89,13 @@ document.addEventListener(
   (event) => {
     const t = event.target;
     if (t instanceof HTMLDialogElement && t.open) {
-      fillAds(t, true);
+      ensureAdsenseScript().then(() => fillAds(t, true));
       return;
     }
     if (!(t instanceof HTMLElement) || t.popover == null) return;
-    if (t.matches(":popover-open")) fillAds(t, true);
+    if (t.matches(":popover-open")) {
+      ensureAdsenseScript().then(() => fillAds(t, true));
+    }
   },
   true,
 );
@@ -77,17 +105,19 @@ if ("IntersectionObserver" in window) {
     (entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
-        fillAds(entry.target, true);
+        ensureAdsenseScript().then(() => fillAds(entry.target, true));
         lazyIo.unobserve(entry.target);
       }
     },
     { rootMargin: "200px 0px" },
   );
-  const watchLazy = () => {
+  const observeLazy = () => {
     document.querySelectorAll("[data-ad-lazy]").forEach((el) => lazyIo.observe(el));
   };
-  watchLazy();
-  document.addEventListener("resuma:navigate", () => queueMicrotask(watchLazy));
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", observeLazy, { once: true });
+  } else {
+    observeLazy();
+  }
+  document.addEventListener("resuma:navigate", () => queueMicrotask(observeLazy));
 }
-
-globalThis.__yttFillAds = (el) => fillAds(el || document, true);
