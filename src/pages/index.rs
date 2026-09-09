@@ -35,10 +35,10 @@ fn idle() -> View {
                 <div class="hero-particles" data-hero-particles="" aria-hidden="true"></div>
                 <section class="hero">
                     <div class="hero-copy">
-                        <p class="eyebrow">"Free YouTube transcript"</p>
-                        <h1>"Get the text from a YouTube video"</h1>
+                        <p class="eyebrow">"YouTubeForge"</p>
+                        <h1>"All the YouTube tools you need"</h1>
                         <p class="hero-lead">
-                            "Paste a public link. Search the captions, copy them, or download SRT. From the same result you can save the audio, translate, or get a short recap — without pasting again."
+                            "Paste a public link once. Pull the transcript, download SRT or audio, translate captions, or grab a short recap — same video, no account."
                         </p>
                         {home_search(Mode::Text)}
                     </div>
