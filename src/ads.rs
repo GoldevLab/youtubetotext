@@ -77,16 +77,38 @@ fn slot_id(placement: &str, size: &str) -> Option<String> {
 }
 
 pub fn head_snippet() -> String {
-    // Load AdSense after first paint (injected by youtubetotext-ads.js) so it
-    // does not compete with LCP/FCP on mobile. Keep dns-prefetch only.
+    // Tiny deferred loader only — avoid an eager module fetch competing with LCP.
+    // AdSense boots after first engagement (or long idle) inside youtubetotext-ads.js.
     match client_id() {
         Some(id) => format!(
             r#"<link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
 <link rel="dns-prefetch" href="https://googleads.g.doubleclick.net" />
 <meta name="ytt-adsense-client" content="{id}" />
-<script type="module" src="/js/youtubetotext-ads.js?v=2"></script>"#
+<script>
+(function(){{
+  function load(){{
+    if(window.__yttAdsJs)return;
+    window.__yttAdsJs=1;
+    var s=document.createElement('script');
+    s.type='module';
+    s.src='/js/youtubetotext-ads.js?v=3';
+    s.fetchPriority='low';
+    document.head.appendChild(s);
+  }}
+  function arm(){{
+    var start=function(){{load();}};
+    ['pointerdown','keydown','touchstart','scroll'].forEach(function(e){{
+      window.addEventListener(e,start,{{once:true,passive:true}});
+    }});
+    if('requestIdleCallback' in window)requestIdleCallback(start,{{timeout:12000}});
+    else window.addEventListener('load',function(){{setTimeout(start,8000);}},{{once:true}});
+  }}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',arm,{{once:true}});
+  else arm();
+}})();
+</script>"#
         ),
-        None => r#"<script type="module" src="/js/youtubetotext-ads.js?v=2"></script>"#.into(),
+        None => String::new(),
     }
 }
 

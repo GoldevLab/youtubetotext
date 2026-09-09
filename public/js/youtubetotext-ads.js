@@ -1,4 +1,4 @@
-/** Lazy-load AdSense after first paint, then fill reserved <ins> units. */
+/** Lazy-load AdSense after engagement (or long idle) to keep mobile TBT low. */
 
 function adsenseClient() {
   const meta = document.querySelector('meta[name="ytt-adsense-client"]');
@@ -15,6 +15,7 @@ function ensureAdsenseScript() {
   return new Promise((resolve) => {
     const s = document.createElement("script");
     s.async = true;
+    s.fetchPriority = "low";
     s.crossOrigin = "anonymous";
     s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(id)}`;
     s.onload = () => resolve(true);
@@ -59,14 +60,8 @@ async function bootVisible() {
 }
 
 function scheduleBoot() {
-  const run = () => {
-    bootVisible().catch(() => {});
-  };
-  if ("requestIdleCallback" in window) {
-    requestIdleCallback(run, { timeout: 2500 });
-  } else {
-    setTimeout(run, 1200);
-  }
+  // Parent loader already deferred this module past first paint / engagement.
+  bootVisible().catch(() => {});
 }
 
 if (document.readyState === "loading") {

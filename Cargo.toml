@@ -5,7 +5,7 @@ edition = "2021"
 description = "YouTubeForge — transcripts, audio, SRT, translation, and summaries."
 
 [dependencies]
-resuma = { git = "https://github.com/GoldevLab/resuma.git", rev = "c339de18709d324f2dbea3850e0e2b6fbcc707a7" }
+resuma = { git = "https://github.com/GoldevLab/resuma.git", rev = "b46901553ce21df9ac40945b703a28faae00a7e9" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -275,7 +275,7 @@ const HEAD: &str = r##"
 <link rel="preload" href="/themes.css" as="style" />
 <link rel="preload" href="/css/youtubetotext.css?v=r3" as="style" />
 <link rel="stylesheet" href="/themes.css" />
-<script type="module" src="/js/youtubetotext.js?v=5"></script>
+<script type="module" src="/js/youtubetotext.js?v=6" fetchpriority="low"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -345,6 +345,21 @@ async fn main() -> std::io::Result<()> {
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
+    {
+        // RFC 9116 — helps scanners / security researchers; Contact optional via env.
+        let contact = crate::site::contact_email()
+            .map(|e| format!("Contact: mailto:{e}\n"))
+            .unwrap_or_default();
+        let body = format!(
+            "{contact}Canonical: https://forgeyt.com/.well-known/security.txt\nPreferred-Languages: en\nExpires: 2027-12-31T23:59:59Z\n"
+        );
+        let leaked: &'static [u8] = Box::leak(body.into_bytes().into_boxed_slice());
+        app = app.static_asset(
+            "/.well-known/security.txt",
+            leaked,
+            "text/plain; charset=utf-8",
+        );
+    }
     app.with_public_dir(public)
         .with_pwa(FlowPwaConfig {
             name: "YouTubeForge".into(),
@@ -354,7 +369,7 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-14".into(),
+            cache_version: "yf-15".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
@@ -362,7 +377,7 @@ async fn main() -> std::io::Result<()> {
             precache_paths: vec![
                 "/themes.css".into(),
                 "/css/youtubetotext.css?v=r3".into(),
-                "/js/youtubetotext.js?v=5".into(),
+                "/js/youtubetotext.js?v=6".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
                 "/icons/icon-512.png".into(),

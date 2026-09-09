@@ -143,7 +143,14 @@
       stopHero = null;
     };
   };
-  const tryHero = () => mountCaptionStream();
+  const tryHero = () => {
+    const start = () => mountCaptionStream();
+    if ("requestIdleCallback" in window) {
+      requestIdleCallback(start, { timeout: 4000 });
+    } else {
+      setTimeout(start, 1200);
+    }
+  };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", tryHero, { once: true });
   } else {
