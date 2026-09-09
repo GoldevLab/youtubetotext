@@ -89,22 +89,7 @@ const FAMILY: &[(&str, &str, &str)] = &[
         "PlacaQR",
         "3D-printable QR — stand, tile, keychain, or plaque.",
         "https://placaqr.fly.dev",
-    ),
-    (
-        "Linkprobe",
-        "Paste a URL. See which links work and which 404.",
-        "https://linkprobe.fly.dev",
-    ),
-    (
-        "Svgsport",
-        "Paste a page. Download every SVG as a zip.",
-        "https://svgsport.fly.dev",
-    ),
-    (
-        "Billloom",
-        "Invoice, quote, and receipt PDFs. No account, no watermark.",
-        "https://billloom.fly.dev",
-    ),
+    )
 ];
 
 const SELF: &str = "YouTubeForge";
@@ -135,7 +120,7 @@ pub fn sister_apps() -> View {
             <p class="eyebrow">"Also from us"</p>
             <h2>"Free tools, same idea"</h2>
             <p class="hint">
-                "No account. Paste, convert, download. Images under a KB cap, PDFs, 3D QR, and invoices."
+                "No account. Paste, convert, download. Images under a KB cap, PDFs, and 3D QR."
             </p>
             <ul class="related-grid">{cards}</ul>
         </nav>
