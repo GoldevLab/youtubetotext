@@ -3,12 +3,12 @@
 mod actions;
 mod ads;
 mod api;
+mod billing;
 mod cross_sell;
 mod export;
 mod family;
 mod guard;
 mod landing;
-mod landing_es;
 mod langs;
 mod meta_conversions;
 mod site;
@@ -243,6 +243,27 @@ struct LegacyVidQuery {
     tlang: String,
 }
 
+fn redirect_keep_query(dest: &str, uri: Uri) -> Redirect {
+    match uri.query() {
+        Some(q) if !q.is_empty() => Redirect::permanent(&format!("{dest}?{q}")),
+        _ => Redirect::permanent(dest),
+    }
+}
+
+async fn redirect_legacy_es(uri: Uri) -> Redirect {
+    let path = uri.path();
+    let dest = crate::family::Mode::all()
+        .into_iter()
+        .find(|m| m.es_path() == path)
+        .map(|m| m.landing_path())
+        .unwrap_or("/");
+    redirect_keep_query(dest, uri)
+}
+
+async fn redirect_youtube_to_mp3(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-to-audio", uri)
+}
+
 async fn redirect_app_youtube(uri: Uri) -> Redirect {
     match uri.query() {
         Some(q) if !q.is_empty() => Redirect::permanent(&format!("/?{q}")),
@@ -274,9 +295,9 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preload" href="/themes.css" as="style" />
-<link rel="preload" href="/css/youtubetotext.css?v=r4" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r5" as="style" />
 <link rel="stylesheet" href="/themes.css" />
-<script type="module" src="/js/youtubetotext.js?v=10" fetchpriority="low"></script>
+<script type="module" src="/js/youtubetotext.js?v=15" fetchpriority="low"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -302,7 +323,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text and Spanish /youtube-a-texto (audio, traductor, resumen, srt). /privacy /terms /extension.".into(),
+            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension. Legacy Spanish slugs 301 to these.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -335,13 +356,22 @@ async fn main() -> std::io::Result<()> {
         .with_og_image("/og.png")
         .with_head(head)
         .with_seo_kit(seo_kit())
+        .with_sitemap_exclude([
+            "/youtube-a-texto",
+            "/youtube-a-mp3",
+            "/youtube-traductor",
+            "/youtube-resumen",
+            "/youtube-a-srt",
+            "/youtube-to-mp3",
+            "/developers/welcome",
+        ])
         .with_html_theme(
             HtmlTheme::new(["studio"])
                 .dark(["studio"])
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r4")
+        .with_stylesheet("/css/youtubetotext.css?v=r5")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -370,15 +400,15 @@ async fn main() -> std::io::Result<()> {
             background_color: "#14090a".into(),
             start_url: "/".into(),
             scope: "/".into(),
-            cache_version: "yf-21".into(),
+            cache_version: "yf-26".into(),
             display: "standalone".into(),
             orientation: "any".into(),
             lang: "en".into(),
             icon_char: Some("F".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r4".into(),
-                "/js/youtubetotext.js?v=10".into(),
+                "/css/youtubetotext.css?v=r5".into(),
+                "/js/youtubetotext.js?v=15".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
                 "/icons/icon-512.png".into(),
@@ -396,18 +426,24 @@ async fn main() -> std::io::Result<()> {
         .route("/app/youtube", get(redirect_app_youtube))
         .route("/v/{id}", get(redirect_video))
         // Common guess from “YouTube to MP3” copy — canonical SEO path is /youtube-to-audio.
-        .route(
-            "/youtube-to-mp3",
-            get(|| async { Redirect::permanent("/youtube-to-audio") }),
-        )
-        .route("/api", get(|| async { Redirect::permanent("/") }))
-        .route("/pricing", get(|| async { Redirect::permanent("/") }))
+        .route("/youtube-to-mp3", get(redirect_youtube_to_mp3))
+        .route("/youtube-a-texto", get(redirect_legacy_es))
+        .route("/youtube-a-mp3", get(redirect_legacy_es))
+        .route("/youtube-traductor", get(redirect_legacy_es))
+        .route("/youtube-resumen", get(redirect_legacy_es))
+        .route("/youtube-a-srt", get(redirect_legacy_es))
+        .route("/api", get(|| async { Redirect::permanent("/developers") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))
         .route("/api/ingest", post(api::ingest).options(api::preflight))
         .route("/api/translate", post(api::translate).options(api::preflight))
+        .route("/api/challenge", get(api::challenge).options(api::preflight))
         .route("/api/gate", post(api::gate).options(api::preflight))
+        .route("/api/billing/checkout", get(billing::checkout))
+        .route("/api/billing/reveal", get(billing::reveal))
+        .route("/api/billing/webhook", post(billing::webhook))
+        .route("/api/v1/me", get(billing::me).options(api::preflight))
         .route(
             "/api/meta/view-content",
             post(api::meta_view_content).options(api::preflight),

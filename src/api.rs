@@ -1,5 +1,5 @@
-//! App JSON endpoints used by the site UI (and the optional browser extension).
-//! Not a documented public API — callers must be same-site or present a server key.
+//! App JSON endpoints used by the site UI, the optional browser extension,
+//! and paid API keys (`x-api-key` from Lemon Squeezy subscriptions).
 
 use axum::body::Body;
 use axum::extract::Query;
@@ -11,8 +11,9 @@ use serde::Deserialize;
 use crate::export::{as_markdown, as_srt, as_txt, as_vtt};
 use crate::parse::parse_video_id;
 use crate::youtube::{
-    download_audio, download_video, ingest_client_doc, load_transcript, normalize_audio_format,
-    normalize_video_quality, translate_cue_texts, Cue,
+    deny_if_audio_too_long, deny_if_video_too_long, download_audio, download_video,
+    ingest_client_doc, load_transcript, normalize_audio_format, normalize_video_quality,
+    translate_cue_texts, Cue,
 };
 use crate::guard;
 
@@ -24,11 +25,18 @@ pub struct ApiQuery {
     pub tlang: Option<String>,
     pub fmt: Option<String>,
     pub q: Option<String>,
+    pub k: Option<String>,
+    pub dry: Option<String>,
 }
 
 pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(m) = guard::check_app_access(&headers, guard::API) {
         return json_error(StatusCode::NOT_FOUND, &m);
+    }
+    if let Some(sub) = crate::billing::subscriber_from_headers(&headers) {
+        if let Err(m) = crate::billing::take_meter(&sub.id, crate::billing::Meter::Transcript) {
+            return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+        }
     }
     let raw = q
         .v
@@ -109,9 +117,7 @@ pub async fn transcript(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl I
 }
 
 pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
-    if let Err(m) = guard::check_app_access(&headers, guard::AUDIO) {
-        return json_error(StatusCode::NOT_FOUND, &m).into_response();
-    }
+    let dry = q.dry.as_deref().is_some_and(|s| s != "0" && !s.is_empty());
     let raw = q
         .v
         .as_deref()
@@ -122,8 +128,17 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
     let Some(id) = parse_video_id(&raw) else {
         return missing_media_id(&headers);
     };
+    if let Err(d) = guard::check_media_access(&headers, guard::MediaKind::Audio, "", false) {
+        return deny_response(&d, &headers);
+    }
     let fmt = normalize_audio_format(q.fmt.as_deref());
-    match download_audio(&id, fmt).await {
+    if let Err(e) = deny_if_audio_too_long(&id, fmt).await {
+        return fetch_error_response(&e);
+    }
+    if dry {
+        return dry_ok();
+    }
+    match download_audio(&id, fmt, Some(&headers)).await {
         Ok((pick, len, stream)) => {
             let filename = safe_audio_name(&format!("{}-{fmt}", pick.title), &id, &pick.ext);
             let mut builder = Response::builder().status(StatusCode::OK);
@@ -151,17 +166,12 @@ pub async fn audio(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
                     json_error(StatusCode::BAD_GATEWAY, "Could not stream audio.").into_response()
                 })
         }
-        Err(e) => {
-            let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
-            json_error(status, &e.message).into_response()
-        }
+        Err(e) => fetch_error_response(&e),
     }
 }
 
 pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
-    if let Err(m) = guard::check_app_access(&headers, guard::VIDEO) {
-        return json_error(StatusCode::NOT_FOUND, &m).into_response();
-    }
+    let dry = q.dry.as_deref().is_some_and(|s| s != "0" && !s.is_empty());
     let raw = q
         .v
         .as_deref()
@@ -173,7 +183,16 @@ pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
         return missing_media_id(&headers);
     };
     let quality = normalize_video_quality(q.q.as_deref());
-    match download_video(&id, quality).await {
+    if let Err(d) = guard::check_media_access(&headers, guard::MediaKind::Video, quality, false) {
+        return deny_response(&d, &headers);
+    }
+    if let Err(e) = deny_if_video_too_long(&id, quality).await {
+        return fetch_error_response(&e);
+    }
+    if dry {
+        return dry_ok();
+    }
+    match download_video(&id, quality, Some(&headers)).await {
         Ok((pick, len, stream)) => {
             let mut builder = Response::builder().status(StatusCode::OK);
             builder = builder.header(header::CONTENT_TYPE, "video/mp4");
@@ -194,10 +213,7 @@ pub async fn video(Query(q): Query<ApiQuery>, headers: HeaderMap) -> Response {
                     json_error(StatusCode::BAD_GATEWAY, "Could not stream video.").into_response()
                 })
         }
-        Err(e) => {
-            let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
-            json_error(status, &e.message).into_response()
-        }
+        Err(e) => fetch_error_response(&e),
     }
 }
 
@@ -232,6 +248,11 @@ pub struct IngestBody {
 pub async fn translate(headers: HeaderMap, Json(body): Json<TranslateBody>) -> impl IntoResponse {
     if let Err(m) = guard::check_app_access(&headers, guard::TRANSLATE) {
         return json_error(StatusCode::NOT_FOUND, &m);
+    }
+    if let Some(sub) = crate::billing::subscriber_from_headers(&headers) {
+        if let Err(m) = crate::billing::take_meter(&sub.id, crate::billing::Meter::Translate) {
+            return json_error(StatusCode::TOO_MANY_REQUESTS, &m);
+        }
     }
     let tlang = body.tlang.as_deref().unwrap_or("").trim();
     if tlang.is_empty() {
@@ -305,25 +326,93 @@ pub async fn ingest(headers: HeaderMap, Json(body): Json<IngestBody>) -> impl In
     }
 }
 
-pub async fn gate(headers: HeaderMap, Json(body): Json<GateBody>) -> impl IntoResponse {
-    if let Err(m) = guard::check_app_access(&headers, guard::PAGE) {
-        return json_error(StatusCode::NOT_FOUND, &m);
+pub async fn challenge(Query(q): Query<ApiQuery>, headers: HeaderMap) -> impl IntoResponse {
+    match crate::guard::issue_pow(&headers, q.k.as_deref().unwrap_or("media")) {
+        Ok(ch) => {
+            let body = serde_json::to_string(&ch).unwrap_or_else(|_| "{}".into());
+            file_response(
+                StatusCode::OK,
+                "application/json; charset=utf-8",
+                None,
+                body,
+                false,
+            )
+        }
+        Err(d) => deny_tuple(&d),
     }
-    match crate::guard::verify_turnstile(body.token.as_deref()).await {
-        Ok(()) => file_response(
-            StatusCode::OK,
-            "application/json; charset=utf-8",
-            None,
-            r#"{"ok":true}"#.into(),
-            false,
-        ),
-        Err(m) => json_error(StatusCode::FORBIDDEN, &m),
+}
+
+pub async fn gate(headers: HeaderMap, Json(body): Json<GateBody>) -> Response {
+    if let Err(m) = guard::check_app_access(&headers, guard::CHALLENGE) {
+        return json_error(StatusCode::NOT_FOUND, &m).into_response();
+    }
+    let salt = body.salt.as_deref().unwrap_or("");
+    let challenge = body.challenge.as_deref().unwrap_or("");
+    let signature = body.signature.as_deref().unwrap_or("");
+    let Some(number) = body.number else {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "Confirm you are not a bot, then try again.",
+        )
+        .into_response();
+    };
+    let Some(maxnumber) = body.maxnumber else {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "Confirm you are not a bot, then try again.",
+        )
+        .into_response();
+    };
+    let Some(exp) = body.exp else {
+        return json_error(
+            StatusCode::FORBIDDEN,
+            "Confirm you are not a bot, then try again.",
+        )
+        .into_response();
+    };
+    let ip = guard::client_ip_from_headers(&headers);
+    match crate::guard::verify_pow(
+        salt,
+        challenge,
+        number,
+        maxnumber,
+        signature,
+        exp,
+        body.kind.as_deref().unwrap_or("media"),
+        &ip,
+    ) {
+        Ok(cap) => {
+            let ticket = guard::issue_ticket(&ip, cap);
+            let mut headers_out = HeaderMap::new();
+            if let Ok(v) = HeaderValue::from_str(&guard::ticket_cookie_header(&ticket)) {
+                headers_out.insert(header::SET_COOKIE, v);
+            }
+            headers_out.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json; charset=utf-8"),
+            );
+            headers_out.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            let body = serde_json::json!({
+                "ok": true,
+                "hd": cap.allows_hd(),
+                "expires_in": guard::TICKET_TTL_SECS,
+            })
+            .to_string();
+            (StatusCode::OK, headers_out, body).into_response()
+        }
+        Err(d) => deny_response(&d, &headers),
     }
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GateBody {
-    pub token: Option<String>,
+    pub salt: Option<String>,
+    pub challenge: Option<String>,
+    pub number: Option<u32>,
+    pub maxnumber: Option<u32>,
+    pub signature: Option<String>,
+    pub exp: Option<u64>,
+    pub kind: Option<String>,
 }
 
 /// Browser Pixel twin: ViewContent via Meta CAPI with shared `event_id` for dedupe.
@@ -360,6 +449,83 @@ pub async fn preflight(headers: HeaderMap) -> impl IntoResponse {
     let mut out = HeaderMap::new();
     cors_headers_for(&headers, &mut out);
     (StatusCode::NO_CONTENT, out)
+}
+
+fn deny_response(deny: &guard::Deny, headers: &HeaderMap) -> Response {
+    let status = guard::deny_status(deny);
+    if deny.hidden && prefers_html(headers) && status == StatusCode::NOT_FOUND {
+        return Redirect::temporary("/").into_response();
+    }
+    let mut out = HeaderMap::new();
+    out.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    out.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    if let Some(secs) = deny.retry_after {
+        if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
+            out.insert(header::RETRY_AFTER, v);
+        }
+    }
+    let body = serde_json::json!({
+        "error": deny.message,
+        "retry_after": deny.retry_after,
+    })
+    .to_string();
+    (status, out, body).into_response()
+}
+
+fn deny_tuple(deny: &guard::Deny) -> (StatusCode, HeaderMap, String) {
+    let status = guard::deny_status(deny);
+    let mut out = HeaderMap::new();
+    out.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    out.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    if let Some(secs) = deny.retry_after {
+        if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
+            out.insert(header::RETRY_AFTER, v);
+        }
+    }
+    let body = serde_json::json!({
+        "error": deny.message,
+        "retry_after": deny.retry_after,
+    })
+    .to_string();
+    (status, out, body)
+}
+
+fn dry_ok() -> Response {
+    file_response(
+        StatusCode::OK,
+        "application/json; charset=utf-8",
+        None,
+        r#"{"ok":true}"#.into(),
+        false,
+    )
+    .into_response()
+}
+
+fn fetch_error_response(e: &crate::youtube::FetchError) -> Response {
+    let status = StatusCode::from_u16(e.status).unwrap_or(StatusCode::BAD_GATEWAY);
+    let mut out = HeaderMap::new();
+    out.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    out.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    if let Some(secs) = e.retry_after {
+        if let Ok(v) = HeaderValue::from_str(&secs.to_string()) {
+            out.insert(header::RETRY_AFTER, v);
+        }
+    }
+    let body = serde_json::json!({
+        "error": e.message,
+        "retry_after": e.retry_after,
+    })
+    .to_string();
+    (status, out, body).into_response()
 }
 
 fn prefers_html(headers: &HeaderMap) -> bool {
@@ -458,7 +624,7 @@ fn cors_headers_for(req: &HeaderMap, headers: &mut HeaderMap) {
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        HeaderValue::from_static("content-type, x-api-key, authorization"),
+        HeaderValue::from_static("content-type, x-api-key, authorization, x-forge-ticket"),
     );
     headers.insert(
         header::VARY,

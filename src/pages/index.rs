@@ -89,6 +89,7 @@ fn idle() -> View {
                     </li>
                 </ul>
             </section>
+            {extension_install()}
             <section class="faq" aria-labelledby="faq-title">
                 <h2 id="faq-title">"FAQ"</h2>
                 <div class="faq-list">
@@ -106,13 +107,40 @@ fn idle() -> View {
                     </details>
                     <details>
                         <summary>"Is there a limit to the length of the video?"</summary>
-                        <p>"If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."</p>
+                        <p>"Captions have no extra length cap. Video: about 3 hours at 360p/480p, 90 min at 720p, 60 min at 1080p+. Audio: about 3 hours."</p>
                     </details>
                 </div>
             </section>
             {crate::ads::slot("home-faq", "infeed")}
             {crate::cross_sell::sister_apps()}
         </main>
+    }
+}
+
+fn extension_install() -> View {
+    let store = crate::site::chrome_store_url();
+    let actions = if let Some(url) = store {
+        view! {
+            <p class="error-actions">
+                <a class="btn btn-primary" href={url} rel="noopener">"Add to Chrome"</a>
+                <NavLink href="/extension" class="btn btn-ghost">"How it works"</NavLink>
+            </p>
+        }
+    } else {
+        view! {
+            <p class="error-actions">
+                <NavLink href="/extension" class="btn btn-primary">"How to install"</NavLink>
+            </p>
+        }
+    };
+    view! {
+        <section class="features ext-install" aria-labelledby="ext-title">
+            <h2 id="ext-title">"Chrome extension"</h2>
+            <p class="hint">
+                "On a YouTube watch page, grab captions in your browser and open them here — useful when this server is rate-limited."
+            </p>
+            {actions}
+        </section>
     }
 }
 
@@ -165,6 +193,7 @@ fn fail_view(message: String, retry: String, vid: String) -> View {
             <p class="error-actions">
                 <NavLink href={retry} class="btn btn-primary">"Try again"</NavLink>
                 <NavLink href="/" class="btn btn-ghost">"Another link"</NavLink>
+                <NavLink href="/extension" class="btn btn-ghost">"Use the Chrome extension"</NavLink>
                 <button type="button" class="btn btn-ghost" data-fail-audio="" data-vid={vid}>"Download audio anyway"</button>
             </p>
         </main>

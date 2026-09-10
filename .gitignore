@@ -1,6 +1,7 @@
-/target
-**/*.rs.bk
+.DS_Store
 .env
 .env.*
 !.env.example
-.DS_Store
+.resuma/
+**/*.rs.bk
+/target

@@ -13,7 +13,11 @@ pub fn chrome_store_url() -> Option<String> {
     std::env::var("CHROME_STORE_URL")
         .ok()
         .map(|s| s.trim().to_string())
-        .filter(|s| s.starts_with("https://"))
+        .filter(|s| {
+            s.starts_with("https://chromewebstore.google.com/")
+                && !s.contains('…')
+                && s.len() > 48
+        })
 }
 
 /// Send `youtubetotext.fly.dev` HTML traffic to the canonical domain.

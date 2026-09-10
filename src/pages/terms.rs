@@ -25,10 +25,21 @@ pub fn page(_req: FlowRequest) -> View {
             </p>
             <h2>"Ads and availability"</h2>
             <p>
-                "The tool is free in the browser. Ads may appear. We do not promise uptime, completeness, or that every public video will resolve. Results at /?v= are working URLs and stay noindex."
+                "The browser tool is free. Ads may appear. We do not promise uptime, completeness, or that every public video will resolve. Results at /?v= are working URLs and stay noindex."
+            </p>
+            <h2>"API subscriptions"</h2>
+            <p>
+                "Paid API access is sold as a monthly subscription through Lemon Squeezy (Merchant of Record). After checkout you receive an API key. Keys are rate-limited and metered by plan. Cancel anytime in the Lemon customer portal linked from your receipt email. Fees are generally non-refundable once a key has been issued, except where Lemon’s or local law requires otherwise."
+            </p>
+            <p>
+                "Do not share your API key. Do not use the API to build a competing public free proxy that bypasses our free-tier limits. We may suspend keys that abuse YouTube, our infrastructure, or applicable law."
             </p>
             <p>
                 <NavLink href="/privacy">"Privacy"</NavLink>
+                " · "
+                <NavLink href="/pricing">"Pricing"</NavLink>
+                " · "
+                <NavLink href="/developers">"API"</NavLink>
             </p>
         </main>
     }

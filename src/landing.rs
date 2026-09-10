@@ -114,7 +114,7 @@ pub fn home_structured_data() -> Value {
                         "name": "Is there a limit to the length of the video?",
                         "acceptedAnswer": {
                             "@type": "Answer",
-                            "text": "If YouTube has captions for a public video, YouTubeForge can load them. There is no extra length cap on our side."
+                            "text": "Captions have no extra length cap. Video: about 3 hours at 360p/480p, 90 min at 720p, 60 min at 1080p+. Audio: about 3 hours."
                         }
                     }
                 ]
@@ -138,34 +138,14 @@ pub fn home_json_ld_script() -> String {
 }
 
 pub fn seo_landing(mode: Mode) -> View {
-    render_landing(mode, landing_for(mode), false)
+    render_landing(mode, landing_for(mode))
 }
 
-pub fn seo_landing_es(mode: Mode) -> View {
-    render_landing(mode, crate::landing_es::landing_for_es(mode), true)
-}
-
-fn render_landing(mode: Mode, landing: crate::family::Landing, es: bool) -> View {
+fn render_landing(mode: Mode, landing: crate::family::Landing) -> View {
     set_page_title(landing.title);
     set_page_description(landing.description);
-    set_page_canonical(canonical_url(if es {
-        mode.es_path()
-    } else {
-        mode.landing_path()
-    }));
+    set_page_canonical(canonical_url(mode.landing_path()));
     set_page_json_ld(faq_json_ld(&landing.faq));
-    let alt_href = if es {
-        mode.landing_path().to_string()
-    } else {
-        mode.es_path().to_string()
-    };
-    let alt_label = if es {
-        "This page in English"
-    } else {
-        "Esta página en español"
-    };
-    let limits_title = if es { "Límites" } else { "Limits" };
-    let faq_title = if es { "Preguntas frecuentes" } else { "FAQ" };
 
     let howto: Vec<View> = landing
         .howto
@@ -217,7 +197,7 @@ fn render_landing(mode: Mode, landing: crate::family::Landing, es: bool) -> View
         .collect();
 
     view! {
-        <main class="home-page landing-page" lang={if es { "es" } else { "en" }}>
+        <main class="home-page landing-page" lang="en">
             <div class="hero-wrap">
                 <div class="hero-particles" data-hero-particles="" aria-hidden="true"></div>
                 <section class="hero">
@@ -225,9 +205,6 @@ fn render_landing(mode: Mode, landing: crate::family::Landing, es: bool) -> View
                         <p class="eyebrow">{landing.eyebrow}</p>
                         <h1>{landing.h1}</h1>
                         <p class="hero-lead">{landing.lead}</p>
-                        <p class="hint">
-                            <NavLink href={alt_href}>{alt_label}</NavLink>
-                        </p>
                         {home_search(mode)}
                     </div>
                 </section>
@@ -249,14 +226,14 @@ fn render_landing(mode: Mode, landing: crate::family::Landing, es: bool) -> View
             </section>
 
             <section class="content-section limits">
-                <h2>{limits_title}</h2>
+                <h2>"Limits"</h2>
                 <p>{landing.limits}</p>
             </section>
 
             {crate::ads::slot("landing-mid", "infeed")}
 
             <section class="faq" aria-labelledby="faq-title">
-                <h2 id="faq-title">{faq_title}</h2>
+                <h2 id="faq-title">"FAQ"</h2>
                 <div class="faq-list">{faq}</div>
             </section>
 

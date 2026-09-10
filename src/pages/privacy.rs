@@ -50,7 +50,7 @@ pub fn page(_req: FlowRequest) -> View {
                 "When you paste a YouTube link we send that video id to YouTube’s public player and caption endpoints so we can show the transcript, audio, or subtitle file. Rate limits use your IP for a short window so scrapers cannot drain captions through this app."
             </p>
             <p>
-                "Optional Cloudflare Turnstile may run on the paste form to block bots. Transcripts you edit stay in the browser until you copy or download them."
+                "Audio and video downloads ask your browser to solve a short local proof-of-work, then we issue a cookie ticket for a few minutes. Shareable transcript links (`/?v=`) do not require that check. We do not send that puzzle to a third-party captcha network. Transcripts you edit stay in the browser until you copy or download them."
             </p>
 
             <h2>"What we do not do"</h2>

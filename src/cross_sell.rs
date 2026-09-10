@@ -57,13 +57,15 @@ pub fn seo_footer_links() -> View {
             <span aria-hidden="true">" · "</span>
             <NavLink href="/youtube-to-srt">"SRT"</NavLink>
             <span aria-hidden="true">" · "</span>
-            <NavLink href="/youtube-a-texto">"ES"</NavLink>
-            <span aria-hidden="true">" · "</span>
             <NavLink href="/privacy">"Privacy"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/terms">"Terms"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/extension">"Extension"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/pricing">"Pricing"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/developers">"API"</NavLink>
         </nav>
     }
 }

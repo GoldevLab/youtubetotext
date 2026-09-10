@@ -17,22 +17,20 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/youtube-translator` | Caption translation |
 | `/youtube-summary` | Chapter recap |
 | `/youtube-to-srt` | SRT / VTT |
-| `/youtube-a-texto` | Transcripción (ES) |
-| `/youtube-a-mp3` | Audio / MP3 (ES) |
-| `/youtube-traductor` | Traducir subtítulos (ES) |
-| `/youtube-resumen` | Resumen (ES) |
-| `/youtube-a-srt` | SRT / VTT (ES) |
 | `/privacy` | Privacy / AdSense |
-| `/terms` | Terms (captions, MP3, video) |
+| `/terms` | Terms (captions, MP3, video, API) |
 | `/extension` | Chrome extension |
+| `/pricing` | Free web + Basic/Pro API (Lemon Squeezy) |
+| `/developers` | API docs |
 
-`/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`.
+`/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`. Legacy Spanish slugs (`/youtube-a-texto`, `/youtube-a-mp3`, `/youtube-traductor`, `/youtube-resumen`, `/youtube-a-srt`) 301 to the English landings.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
 - Download audio when YouTube exposes a plain audio URL
+- Optional **paid API** (`x-api-key`) via Lemon Squeezy subscriptions
 
-Internal app routes under `/api/*` power the UI only (same-site). They are not a public developer API. Optional Cloudflare Turnstile: set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` on Fly.
+Website `/api/*` routes power the UI (same-site). Paid keys unlock the same endpoints without proof-of-work. Downloads on the free web still need a short-lived HMAC ticket after local SHA-256 PoW. Shared `/?v=` transcript links stay open.
 
 ## Optional env (do not invent values)
 
@@ -43,6 +41,10 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `SITE_URL` | Canonical origin |
 | `ADSENSE_CLIENT` / `ADSENSE_SLOT*` | Live ads + `/ads.txt` |
 | `FORGE_API_KEYS` or `API_KEY` | Ops escape hatch for internal tooling |
+| `LEMON_API_KEY` | Lemon Squeezy API key |
+| `LEMON_STORE_ID` | Store id (numeric string) |
+| `LEMON_VARIANT_BASIC` / `LEMON_VARIANT_PRO` | Subscription variant ids |
+| `LEMON_WEBHOOK_SECRET` | Webhook signing secret → `POST /api/billing/webhook` |
 | `CONTACT_EMAIL` | Shown on `/privacy` |
 | `CHROME_STORE_URL` | Store button on `/extension` |
 | `GSC_VERIFICATION` | Search Console HTML meta tag (paste the content= value) |
@@ -50,7 +52,14 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `META_PIXEL_ID` (digits only) | Meta Pixel (deferred; PageView + ViewContent on `?v=`) |
 | `PRIVATE_PIXEL_TOKEN` | Meta Conversions API token — mirrors ViewContent server-side with the same `event_id` as the Pixel |
 | `META_TEST_EVENT_CODE` (optional) | Events Manager test code while verifying CAPI |
-| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET` | Home paste captcha |
+| `GATE_SECRET` (optional) | 32-byte hex HMAC key for download tickets; auto-generated under `RESUMA_DATA_DIR` if unset |
+
+### Lemon Squeezy setup
+
+1. Create two subscription products/variants: **Basic $9/mo**, **Pro $29/mo**.
+2. Set the secrets above on Fly.
+3. Webhook URL: `https://forgeyt.com/api/billing/webhook` — events: `subscription_created`, `subscription_updated`, `subscription_expired`, `subscription_cancelled`, `subscription_paused`, `subscription_resumed`, `order_created`.
+4. Checkout: `/api/billing/checkout?plan=basic|pro` → Lemon → `/developers/welcome?t=…` reveals the key once.
 
 **You do in Google / Meta (not in git):**
 1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml`.

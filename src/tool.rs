@@ -101,28 +101,6 @@ pub fn home_search(mode: Mode) -> View {
         e.preventDefault();
         if (err) err.hidden = true;
         input?.removeAttribute("aria-invalid");
-        if (root.dataset.turnstile === "1") {
-            const token = window.turnstile?.getResponse?.() || form.querySelector('[name="turnstile"]')?.value;
-            if (!token) {
-                if (err) { err.hidden = false; err.textContent = "Confirm you are not a bot, then try again."; }
-                return;
-            }
-            try {
-                const r = await fetch("/api/gate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", Accept: "application/json" },
-                    body: JSON.stringify({ token }),
-                });
-                if (!r.ok) {
-                    const data = await r.json().catch(() => ({}));
-                    if (err) { err.hidden = false; err.textContent = data.error || "Confirm you are not a bot, then try again."; }
-                    return;
-                }
-            } catch (_) {
-                if (err) { err.hidden = false; err.textContent = "Confirm you are not a bot, then try again."; }
-                return;
-            }
-        }
         form?.classList.add("is-busy");
         const submitBtn = form?.querySelector('button[type="submit"]');
         if (submitBtn) {
@@ -137,22 +115,10 @@ pub fn home_search(mode: Mode) -> View {
 "##
     );
 
-    let site = crate::guard::turnstile_site_key().unwrap_or_default();
-    let ts_flag = if site.is_empty() { String::new() } else { "1".into() };
-    let ts_block = if site.is_empty() {
-        View::empty()
-    } else {
-        View::raw(format!(
-            r#"<div class="cf-turnstile" data-sitekey="{}"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>"#,
-            html_escape::encode_double_quoted_attribute(&site)
-        ))
-    };
-
     view! {
-        <div id="ytt-home" data-mode={slug.clone()} data-turnstile={ts_flag}>
+        <div id="ytt-home" data-mode={slug.clone()}>
             <Form submit={crate::actions::open_transcript} class="hero-form">
                 <input type="hidden" name="mode" value={slug} />
-                <input type="hidden" name="turnstile" value="" />
                 <div class="hp-field" aria-hidden="true">
                     <label>
                         "Company website"
@@ -209,17 +175,16 @@ pub fn home_search(mode: Mode) -> View {
                         <span>"Quality"</span>
                         <select class="media-dl-q" data-vq="" aria-label="Video quality">
                             <option value="360">"360p"</option>
-                            <option value="480">"480p"</option>
-                            <option value="720" selected=true>"720p"</option>
-                            <option value="1080">"1080p"</option>
-                            <option value="1440">"1440p"</option>
-                            <option value="2160">"4K"</option>
-                            <option value="best">"Best"</option>
+                            <option value="480" selected=true>"480p"</option>
+                            <option value="720">"720p (1 / 30 min)"</option>
+                            <option value="1080">"1080p (1 / day)"</option>
+                            <option value="1440">"1440p (1 / day)"</option>
+                            <option value="2160">"4K (1 / day)"</option>
+                            <option value="best">"Best (1 / day)"</option>
                         </select>
                     </label>
                     <button type="button" class="btn btn-secondary" data-home-video="">"Download video"</button>
                 </div>
-                {ts_block}
                 <p id="url-help" class="hint">"Works with watch, shorts, youtu.be, and a bare video id. No account."</p>
                 <p id="url-error" class="hint form-error" data-form-error="" hidden="" role="alert"></p>
             </Form>

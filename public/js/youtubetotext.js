@@ -354,17 +354,191 @@
     } catch (_) {}
   };
 
-  /** Keep the page; never navigate to bare /api/video. */
-  const startIframeDownload = (href) => {
+  const closeDlDialog = (root) => {
+    try {
+      globalThis.__resuma?.closeModal?.("media-dl");
+    } catch (_) {}
+    const dlg = root?.querySelector("#r-modal-media-dl") || root?.querySelector(".dl-dialog");
+    if (dlg instanceof HTMLDialogElement && dlg.open) {
+      try {
+        dlg.close();
+      } catch (_) {}
+    }
+  };
+
+  /** Keep the page; never navigate to bare /api/video. Surface JSON errors from the iframe. */
+  const readIframeJsonError = (frame) => {
+    try {
+      const doc = frame.contentDocument;
+      if (!doc) return null;
+      const text = (doc.body?.innerText || doc.body?.textContent || "").trim();
+      if (!text) return null;
+      const data = JSON.parse(text);
+      if (data && typeof data.error === "string" && data.error) {
+        const err = new Error(data.error);
+        err.retryAfter = data.retry_after;
+        return err;
+      }
+    } catch (_) {}
+    return null;
+  };
+
+  const startIframeDownload = (href, onError) => {
     if (!href || !/[?&]v=/.test(href)) return false;
     const frame = document.createElement("iframe");
     frame.hidden = true;
     frame.setAttribute("aria-hidden", "true");
+    let reported = false;
+    const report = (err) => {
+      if (reported || !err) return;
+      reported = true;
+      if (typeof onError === "function") onError(err);
+      frame.remove();
+    };
+    const probe = () => {
+      const err = readIframeJsonError(frame);
+      if (err) report(err);
+    };
+    frame.addEventListener("load", probe);
+    const iv = setInterval(probe, 1500);
     frame.src = href;
     document.body.append(frame);
-    setTimeout(() => frame.remove(), 180000);
+    setTimeout(() => {
+      clearInterval(iv);
+      if (!reported) frame.remove();
+    }, 180000);
     return true;
   };
+
+  const sha256hex = async (text) => {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  const solvePow = async (salt, challenge, max) => {
+    const cap = Number(max) || 0;
+    const want = String(challenge || "").toLowerCase();
+    for (let n = 0; n <= cap; n++) {
+      if ((await sha256hex(salt + String(n))) === want) return n;
+      if (n % 96 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+    throw new Error("Could not confirm you are not a bot. Try again.");
+  };
+
+  let gateCap = "";
+  let gateUntil = 0;
+  const ensureGate = async (kind) => {
+    const want = kind === "hd" ? "hd" : "media";
+    const now = Date.now();
+    if (now < gateUntil) {
+      if (want === "media" && (gateCap === "media" || gateCap === "hd")) return true;
+      if (want === "hd" && gateCap === "hd") return true;
+    } else {
+      gateCap = "";
+    }
+    try {
+      const chRes = await fetch("/api/challenge?k=" + encodeURIComponent(want), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      const ch = await chRes.json().catch(() => ({}));
+      if (!chRes.ok) {
+        const err = new Error(ch.error || "Confirm you are not a bot, then try again.");
+        err.retryAfter = ch.retry_after;
+        throw err;
+      }
+      const number = await solvePow(ch.salt, ch.challenge, ch.maxnumber);
+      const gRes = await fetch("/api/gate", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          salt: ch.salt,
+          challenge: ch.challenge,
+          number,
+          maxnumber: ch.maxnumber,
+          signature: ch.signature,
+          exp: ch.exp,
+          kind: ch.kind || want,
+        }),
+      });
+      const g = await gRes.json().catch(() => ({}));
+      if (!gRes.ok) {
+        const err = new Error(g.error || "Confirm you are not a bot, then try again.");
+        err.retryAfter = g.retry_after;
+        throw err;
+      }
+      gateCap = g.hd ? "hd" : "media";
+      const ttl = Math.max(30, Number(g.expires_in) || 600) - 30;
+      gateUntil = Date.now() + ttl * 1000;
+      return true;
+    } catch (e) {
+      gateCap = "";
+      gateUntil = 0;
+      throw e;
+    }
+  };
+
+  const dryMedia = async (href) => {
+    const u = href.includes("?") ? href + "&dry=1" : href + "?dry=1";
+    const r = await fetch(u, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(data.error || "Download is not available right now.");
+      err.retryAfter = data.retry_after;
+      err.status = r.status;
+      throw err;
+    }
+    return true;
+  };
+
+  const isHdQ = (q) => ["1080", "1440", "2160", "best"].includes(String(q || ""));
+
+  const runMediaDownload = async ({ href, kind, q, root, onError }) => {
+    const fail = (msg) => {
+      if (typeof onError === "function") onError(msg);
+      else if (root) {
+        const err = root.querySelector("[data-form-error]");
+        if (err) {
+          err.hidden = false;
+          err.textContent = msg;
+        }
+      }
+    };
+    try {
+      const needHd = kind === "video" && isHdQ(q);
+      if (needHd) {
+        const ok = window.confirm(
+          "1080p and 4K are limited to one download per day from this network, and need a short extra check. Continue?",
+        );
+        if (!ok) return false;
+      }
+      try {
+        await dryMedia(href);
+      } catch (e) {
+        if (e && e.status === 403) {
+          await ensureGate(needHd ? "hd" : "media");
+          await dryMedia(href);
+        } else {
+          throw e;
+        }
+      }
+      await showDlDialog(root, kind);
+      startIframeDownload(href, (e) => {
+        closeDlDialog(root);
+        fail(e && e.message ? e.message : "Download is not available right now.");
+      });
+      return true;
+    } catch (e) {
+      fail(e && e.message ? e.message : "Download is not available right now.");
+      return false;
+    }
+  };
+
+  window.__yttGate = { ensure: ensureGate, download: runMediaDownload, solvePow };
 
   document.addEventListener(
     "click",
@@ -378,7 +552,8 @@
         e.stopPropagation();
         const id = failAudio.getAttribute("data-vid") || "";
         if (!/^[\w-]{11}$/.test(id)) return;
-        startIframeDownload(`/api/audio?v=${encodeURIComponent(id)}&fmt=mp3`);
+        const href = `/api/audio?v=${encodeURIComponent(id)}&fmt=mp3`;
+        void runMediaDownload({ href, kind: "audio", q: "", root: document.getElementById("ytt-home") });
         return;
       }
 
@@ -402,15 +577,72 @@
       }
       if (err) err.hidden = true;
       input?.removeAttribute("aria-invalid");
-      const q = root?.querySelector("[data-vq]")?.value || "720";
+      const q = root?.querySelector("[data-vq]")?.value || "480";
       const afmt = root?.querySelector("[data-afmt]")?.value || "mp3";
       const kind = videoBtn ? "video" : "audio";
       const href = videoBtn
         ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`
         : `/api/audio?v=${encodeURIComponent(id)}&fmt=${encodeURIComponent(afmt)}`;
-      void showDlDialog(root, kind);
-      startIframeDownload(href);
+      void runMediaDownload({
+        href,
+        kind,
+        q,
+        root,
+        onError: (msg) => {
+          if (err) {
+            err.hidden = false;
+            err.textContent = msg;
+          }
+        },
+      });
     },
     true,
   );
+
+  const runWelcomeReveal = async () => {
+    const root = document.querySelector("[data-forge-welcome]");
+    if (!root) return;
+    const t = root.getAttribute("data-forge-token") || "";
+    if (!t.startsWith("ft_")) return;
+    const status = root.querySelector("[data-welcome-status]");
+    const keyEl = root.querySelector("[data-welcome-key]");
+    const usage = root.querySelector("[data-welcome-usage]");
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 20; i++) {
+      try {
+        const r = await fetch("/api/billing/reveal?t=" + encodeURIComponent(t), {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        const data = await r.json().catch(() => ({}));
+        if (data.api_key && keyEl) {
+          keyEl.hidden = false;
+          keyEl.textContent = data.api_key;
+          if (status) status.textContent = data.message || "Copy this key now. It will not be shown again.";
+          if (usage && data.usage) {
+            usage.hidden = false;
+            usage.textContent =
+              "Plan: " +
+              (data.plan || "") +
+              " · transcripts " +
+              (data.usage.transcripts?.used ?? 0) +
+              "/" +
+              (data.usage.transcripts?.cap ?? "?");
+          }
+          return;
+        }
+        if (status) status.textContent = data.message || data.error || "Still provisioning…";
+        if (!data.pending && r.status === 404) return;
+      } catch (_) {
+        if (status) status.textContent = "Network error — retrying…";
+      }
+      await sleep(1500);
+    }
+    if (status) {
+      status.textContent =
+        "Timed out waiting for the key. Check your Lemon receipt email, then refresh this page.";
+    }
+  };
+  runWelcomeReveal();
+  document.addEventListener("resuma:navigate", () => requestAnimationFrame(runWelcomeReveal));
 })();

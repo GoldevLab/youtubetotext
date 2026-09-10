@@ -380,51 +380,25 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     const downloadAudio = async (ws, href) => {
         startMediaDownload(ws, href, "audio");
     };
-    const armVideoDialog = (dlg) => {
-        if (!(dlg instanceof HTMLDialogElement) || dlg.dataset.ready) return;
-        dlg.dataset.ready = "1";
-        if (!("closedBy" in HTMLDialogElement.prototype)) {
-            dlg.addEventListener("click", (event) => {
-                if (event.target !== dlg) return;
-                const rect = dlg.getBoundingClientRect();
-                const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height
-                    && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
-                if (!inside) dlg.close();
-            });
-        }
-    };
     const startVideoDownload = (ws, href) => startMediaDownload(ws, href, "video");
     const startMediaDownload = async (ws, href, kind) => {
         if (!href || !/[?&]v=/.test(href)) {
             F.setStatus(ws, "Missing video id for download.");
             return;
         }
-        const dlg = ws.querySelector("#r-modal-media-dl") || ws.querySelector(".dl-dialog");
-        armVideoDialog(dlg);
-        if (dlg instanceof HTMLDialogElement) {
-            const title = dlg.querySelector("[data-dl-title]") || dlg.querySelector("h2");
-            const lead = dlg.querySelector("[data-dl-lead]") || dlg.querySelector("p");
-            if (title) title.textContent = kind === "audio" ? "Your audio is downloading" : "Your video is downloading";
-            if (lead) lead.textContent = kind === "audio"
-                ? "The file will save to your downloads folder. Long talks / MP3 conversion can take a few minutes — keep this tab open."
-                : "The file will save to your downloads folder. 1–2 hour videos at 1080p/4K can take several minutes to start. If it stalls, try 360p or 480p.";
-            try {
-                const open = globalThis.__resuma?.showModal?.("media-dl");
-                if (open && typeof open.then === "function") await open;
-                else if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
-            } catch (_) {
-                if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
-            }
-            try { globalThis.__yttFillAds?.(dlg); } catch (_) {}
+        const q = ws.querySelector("[data-vq]")?.value || "480";
+        const G = globalThis.__yttGate;
+        if (G?.download) {
+            await G.download({
+                href,
+                kind,
+                q,
+                root: ws,
+                onError: (msg) => F.setStatus(ws, msg, 5000),
+            });
+            return;
         }
-        // Hidden iframe keeps you on the page; a synthetic <a download> often
-        // navigates to /api/video instead of saving the stream.
-        const frame = document.createElement("iframe");
-        frame.hidden = true;
-        frame.setAttribute("aria-hidden", "true");
-        frame.src = href;
-        document.body.append(frame);
-        setTimeout(() => frame.remove(), 180000);
+        F.setStatus(ws, "Reload the page, then try the download again.", 5000);
     };
     const sourcePayload = (ws) => {
         const el = ws.querySelector("#ytt-source");
@@ -796,7 +770,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
             if (videoBtn) {
                 e.preventDefault();
                 const vid = ws.dataset.vid || "";
-                const q = ws.querySelector("[data-vq]")?.value || "720";
+                const q = ws.querySelector("[data-vq]")?.value || "480";
                 F.startVideoDownload(ws, `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(q)}`);
                 return;
             }
@@ -1048,12 +1022,12 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                                 <span>"Quality"</span>
                                 <select class="media-dl-q" data-vq="" aria-label="Video quality">
                                     <option value="360">"360p"</option>
-                                    <option value="480">"480p"</option>
-                                    <option value="720" selected=true>"720p"</option>
-                                    <option value="1080">"1080p"</option>
-                                    <option value="1440">"1440p"</option>
-                                    <option value="2160">"4K"</option>
-                                    <option value="best">"Best"</option>
+                                    <option value="480" selected=true>"480p"</option>
+                                    <option value="720">"720p (1 / 30 min)"</option>
+                                    <option value="1080">"1080p (1 / day)"</option>
+                                    <option value="1440">"1440p (1 / day)"</option>
+                                    <option value="2160">"4K (1 / day)"</option>
+                                    <option value="best">"Best (1 / day)"</option>
                                 </select>
                             </label>
                             <button type="button" class="btn btn-secondary" data-video="">"Download video"</button>

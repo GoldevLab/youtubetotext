@@ -163,7 +163,7 @@ const TEXT: Landing = Landing {
         ("Is YouTubeForge free?", "Yes. No sign-up. Ads may appear around the page; the transcript itself is not paywalled."),
         ("Do you transcribe the audio with speech-to-text?", "No. We load YouTube’s existing caption tracks. If the video has no captions, this tool cannot invent them."),
         ("Where does the transcript live after I generate it?", "On /?v={videoId}&mode=text. Optional query: lang, tlang, and mode (audio, translate, summary, srt). Those result URLs are noindex so they do not flood search."),
-        ("Is there a length cap?", "We do not add one. If YouTube has captions for a public video, we load them."),
+        ("Is there a length cap?", "Captions: no extra cap. Video: about 3 hours at 360p/480p, 90 min at 720p, 60 min at 1080p or 4K. Audio: about 3 hours."),
         ("Can I keep timestamps?", "Yes. Copy with timestamps, Copy Markdown (YouTube time links), or download timed TXT."),
     ],
 };
@@ -193,11 +193,11 @@ const AUDIO: Landing = Landing {
         ("Language listening", "Play the original audio while you read a translated transcript in another tab."),
         ("No captions", "The video has speech but YouTube never shipped a timedtext track — audio still may work."),
     ],
-    limits: "Only public videos we can resolve through InnerTube. Ciphered streams, DRM-ish formats, and region/age walls fail. Use this for content you are allowed to keep a personal copy of. We are not a piracy mirror and we do not host a library of files.",
+    limits: "Only public videos we can resolve through InnerTube. Ciphered streams, DRM-ish formats, and region/age walls fail. Audio downloads cap around 3 hours. Use this for content you are allowed to keep a personal copy of. We are not a piracy mirror and we do not host a library of files.",
     faq: [
         ("Is this YouTube to MP3?", "Yes — MP3 is the default download. You can still pick M4A, Opus, or WAV. Use it only for videos you are allowed to keep a personal copy of."),
         ("Why did download fail?", "The player JSON had no plain audio URL (signature/n-param), or the video is blocked for this network. Try another public video."),
-        ("How large are the files?", "Roughly the audio bitrate times duration (for example ~1 MB per minute at 128 kbps AAC). We stream; we do not buffer the whole file in RAM."),
+        ("How large are the files?", "Roughly the audio bitrate times duration (for example ~1 MB per minute at 128 kbps AAC). Downloads cap around 3 hours. We stream; we do not buffer the whole file in RAM."),
         ("Can I clip a range?", "Not on the download yet. Trim exists on the transcript side. For audio, download the full stream."),
         ("Is it free?", "Yes, with the same ads-around-the-tool model as the rest of YouTubeForge."),
     ],

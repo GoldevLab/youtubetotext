@@ -1,7 +1,10 @@
 //! Fetch public YouTube captions in pure Rust (InnerTube + timedtext).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use axum::http::HeaderMap;
 
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -61,6 +64,8 @@ static CACHE: Lazy<Mutex<Vec<(String, Instant, Arc<TranscriptDoc>)>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
 static AUDIO_CACHE: Lazy<Mutex<Vec<(String, Instant, Vec<AudioPick>)>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
+static DURATION_CACHE: Lazy<Mutex<HashMap<String, (Instant, u64)>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 /// Skip timedtext after a 429 so we do not make the ban worse.
 static RATE_LIMIT_UNTIL: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(45);
@@ -71,6 +76,7 @@ const GTX_COOLDOWN: Duration = Duration::from_secs(90);
 pub struct FetchError {
     pub status: u16,
     pub message: String,
+    pub retry_after: Option<u64>,
 }
 
 impl FetchError {
@@ -78,6 +84,29 @@ impl FetchError {
         Self {
             status,
             message: message.into(),
+            retry_after: None,
+        }
+    }
+
+    fn busy(message: impl Into<String>, retry_after: u64) -> Self {
+        Self {
+            status: 429,
+            message: message.into(),
+            retry_after: Some(retry_after),
+        }
+    }
+
+    pub(crate) fn from_deny(d: &crate::guard::Deny) -> Self {
+        Self {
+            status: if d.hidden {
+                404
+            } else if d.retry_after.is_some() {
+                429
+            } else {
+                403
+            },
+            message: d.message.clone(),
+            retry_after: d.retry_after,
         }
     }
 }
@@ -460,6 +489,9 @@ async fn player_bundle(
                     }
                 }
                 merge_audio(&mut audios, extract_audio(&player, client.ua));
+                if let Some(secs) = duration_from_player(&player) {
+                    remember_duration(video_id, secs);
+                }
             }
         }
         if let Ok(player) = watch_page_player(video_id, hl).await {
@@ -485,6 +517,7 @@ async fn player_bundle(
             "Could not read this video. It may be private, age-restricted, or removed.",
         ));
     };
+    remember_duration(video_id, meta.duration_secs);
     if !audios.is_empty() {
         cache_audios(video_id, &meta.title, audios);
     }
@@ -1437,6 +1470,60 @@ fn cache_get(key: &str) -> Option<Arc<TranscriptDoc>> {
         .map(|(_, _, d)| d.clone())
 }
 
+/// Duration from InnerTube / player JSON (not client ingest).
+pub fn cached_duration_secs(video_id: &str) -> Option<u64> {
+    if !is_id(video_id) {
+        return None;
+    }
+    let mut g = DURATION_CACHE.lock();
+    g.retain(|_, (at, _)| at.elapsed() < CACHE_TTL);
+    g.get(video_id)
+        .and_then(|(_, secs)| (*secs > 0).then_some(*secs))
+}
+
+fn remember_duration(video_id: &str, secs: u64) {
+    if secs == 0 || !is_id(video_id) {
+        return;
+    }
+    let mut g = DURATION_CACHE.lock();
+    g.retain(|_, (at, _)| at.elapsed() < CACHE_TTL);
+    if g.len() >= CACHE_CAP && !g.contains_key(video_id) {
+        if let Some(old) = g
+            .iter()
+            .min_by_key(|(_, (at, _))| *at)
+            .map(|(k, _)| k.clone())
+        {
+            g.remove(&old);
+        }
+    }
+    g.insert(video_id.to_string(), (Instant::now(), secs));
+}
+
+fn duration_from_player(player: &Value) -> Option<u64> {
+    extract_bundle(player)
+        .map(|(m, _, _)| m.duration_secs)
+        .filter(|s| *s > 0)
+}
+
+/// Best-effort length for download caps (cache, then one InnerTube probe).
+pub async fn video_length_secs(video_id: &str) -> Option<u64> {
+    if let Some(secs) = cached_duration_secs(video_id) {
+        return Some(secs);
+    }
+    if !is_id(video_id) {
+        return None;
+    }
+    for client in listing_clients() {
+        if let Ok(player) = innertube_player(video_id, &client, "en").await {
+            if let Some(secs) = duration_from_player(&player) {
+                remember_duration(video_id, secs);
+                return Some(secs);
+            }
+        }
+    }
+    None
+}
+
 fn cache_get_source(video_id: &str, lang_key: &str) -> Option<Arc<TranscriptDoc>> {
     if !lang_key.is_empty() {
         if let Some(hit) = cache_get(&format!("{video_id}|{lang_key}|")) {
@@ -1657,10 +1744,21 @@ fn parse_gtx_body(body: &str) -> Option<String> {
 fn cache_put(key: String, doc: Arc<TranscriptDoc>) {
     let mut g = CACHE.lock();
     g.retain(|(_, at, _)| at.elapsed() < CACHE_TTL);
+    if let Some(i) = g.iter().position(|(k, _, _)| k == &key) {
+        g[i] = (key, Instant::now(), doc);
+        return;
+    }
     if g.len() >= CACHE_CAP {
         g.remove(0);
     }
     g.push((key, Instant::now(), doc));
+}
+
+fn cache_put_if_absent(key: String, doc: Arc<TranscriptDoc>) {
+    if cache_get(&key).is_some() {
+        return;
+    }
+    cache_put(key, doc);
 }
 
 #[derive(Clone)]
@@ -1834,6 +1932,9 @@ async fn fill_audio_cache(video_id: &str) -> Result<(), FetchError> {
             }
         }
         merge_audio(&mut audios, extract_audio(&player, client.ua));
+        if let Some(secs) = duration_from_player(&player) {
+            remember_duration(video_id, secs);
+        }
         if !audios.is_empty() {
             let label = if title.is_empty() { video_id } else { title.as_str() };
             cache_audios(video_id, label, audios);
@@ -1847,6 +1948,9 @@ async fn fill_audio_cache(video_id: &str) -> Result<(), FetchError> {
             }
         }
         merge_audio(&mut audios, extract_audio(&player, WEB_UA));
+        if let Some(secs) = duration_from_player(&player) {
+            remember_duration(video_id, secs);
+        }
     }
     if audios.is_empty() {
         return Err(audio_missing());
@@ -1882,6 +1986,34 @@ const GV_CHUNK: u64 = 1024 * 1024;
 const GV_MAX: u64 = 200 * 1024 * 1024;
 /// yt-dlp may remux DASH before emitting bytes; keep under Fly `idle_timeout` (300s).
 const YTDLP_FIRST_BYTE: Duration = Duration::from_secs(270);
+/// One ffmpeg/yt-dlp remux on a 512 MB VM. Extra callers get 429.
+static REMUX: Lazy<Arc<tokio::sync::Semaphore>> =
+    Lazy::new(|| Arc::new(tokio::sync::Semaphore::new(1)));
+
+fn remux_busy() -> FetchError {
+    FetchError::busy(
+        "The server is already converting a file. Wait a few seconds and try again.",
+        20,
+    )
+}
+
+fn hold_permit(
+    stream: AudioByteStream,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) -> AudioByteStream {
+    Box::pin(stream::unfold(
+        (stream, Some(permit)),
+        |(mut stream, permit)| async move {
+            match stream.next().await {
+                Some(item) => Some((item, (stream, permit))),
+                None => {
+                    drop(permit);
+                    None
+                }
+            }
+        },
+    ))
+}
 
 pub type AudioByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
 
@@ -2032,6 +2164,7 @@ async fn stream_ytdlp(
     format: &str,
     extra: &[&str],
     fail: &str,
+    max_filesize: &str,
 ) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
     let bin = ytdlp_path().ok_or_else(|| {
         FetchError::new(
@@ -2061,7 +2194,7 @@ async fn stream_ytdlp(
             "--no-mtime",
             // Cap per-format size so a 2h 4K remux cannot fill ephemeral /tmp.
             "--max-filesize",
-            "3G",
+            max_filesize,
             "--retries",
             "8",
             "--fragment-retries",
@@ -2199,14 +2332,15 @@ fn ffmpeg_available() -> bool {
 }
 
 pub fn normalize_video_quality(raw: Option<&str>) -> &'static str {
-    match raw.unwrap_or("720").trim().to_ascii_lowercase().as_str() {
+    match raw.unwrap_or("480").trim().to_ascii_lowercase().as_str() {
         "360" | "360p" => "360",
         "480" | "480p" => "480",
         "1080" | "1080p" => "1080",
         "1440" | "1440p" | "2k" => "1440",
         "2160" | "2160p" | "4k" | "uhd" => "2160",
         "best" | "max" => "best",
-        _ => "720",
+        "720" | "720p" => "720",
+        _ => "480",
     }
 }
 
@@ -2220,18 +2354,21 @@ fn video_ytdlp_format(quality: &str, ffmpeg: bool) -> String {
         "best" => None,
         _ => Some(720),
     };
-    // Progressive MP4 first so long videos start streaming before any remux.
-    // Fall back to DASH+ffmpeg merge when YouTube only offers separate A/V.
+    // H.264 (avc1) + AAC only. Never fall back to bare bv*+ba / generic "best":
+    // remuxing VP9/AV1 into .mp4 often plays audio with a black picture on phones.
     match (ffmpeg, height) {
         (true, None) => {
-            "b[ext=mp4]/best[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b".into()
+            "b[ext=mp4][vcodec^=avc1]/bv*[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/bv*[vcodec^=avc1]+ba[acodec^=mp4a]/best[ext=mp4][vcodec^=avc1]/best[vcodec^=avc1]"
+                .into()
         }
         (true, Some(h)) => format!(
-            "b[height<={h}][ext=mp4]/best[height<={h}][ext=mp4]/bv*[height<={h}][ext=mp4]+ba[ext=m4a]/bv*[height<={h}]+ba/b[height<={h}]/b"
+            "b[height<={h}][ext=mp4][vcodec^=avc1]/bv*[height<={h}][vcodec^=avc1][ext=mp4]+ba[ext=m4a]/bv*[height<={h}][vcodec^=avc1]+ba[acodec^=mp4a]/best[height<={h}][ext=mp4][vcodec^=avc1]/best[height<={h}][vcodec^=avc1]"
         ),
-        (false, None) => "best[ext=mp4]/best".into(),
+        (false, None) => "best[ext=mp4][vcodec^=avc1]/best[vcodec^=avc1]".into(),
         (false, Some(h)) => {
-            format!("best[height<={h}][ext=mp4]/best[height<={h}]/best")
+            format!(
+                "best[height<={h}][ext=mp4][vcodec^=avc1]/best[height<={h}][vcodec^=avc1]"
+            )
         }
     }
 }
@@ -2239,17 +2376,25 @@ fn video_ytdlp_format(quality: &str, ffmpeg: bool) -> String {
 pub async fn download_video(
     video_id: &str,
     quality: &str,
+    headers: Option<&HeaderMap>,
 ) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
     if !is_id(video_id) {
         return Err(FetchError::new(400, "That is not a YouTube video id."));
     }
     let q = normalize_video_quality(Some(quality));
+    deny_if_video_too_long(video_id, q).await?;
     let ffmpeg = ffmpeg_available();
     let spec = video_ytdlp_format(q, ffmpeg);
+    // Sort toward phone-friendly H.264/AAC; avoid VP9/AV1-in-MP4 black screens.
     let extra: Vec<&str> = if ffmpeg {
-        vec!["--merge-output-format", "mp4"]
+        vec![
+            "--merge-output-format",
+            "mp4",
+            "-S",
+            "res,vcodec:h264,acodec:mp4a,ext:mp4:m4a",
+        ]
     } else {
-        Vec::new()
+        vec!["-S", "res,vcodec:h264,acodec:mp4a,ext:mp4:m4a"]
     };
     let mut meta = load_audio_picks(video_id)
         .await
@@ -2258,14 +2403,70 @@ pub async fn download_video(
         .unwrap_or_else(|| placeholder_pick(video_id));
     meta.ext = "mp4".into();
     meta.mime = "video/mp4".into();
-    stream_ytdlp(
+    let permit = REMUX.clone().try_acquire_owned().map_err(|_| remux_busy())?;
+    let (pick, len, stream) = stream_ytdlp(
         video_id,
         meta,
         &spec,
         &extra,
         "Could not start video download",
+        crate::guard::max_filesize_arg(q),
     )
-    .await
+    .await?;
+    commit_media(headers, crate::guard::MediaKind::Video, q)?;
+    Ok((pick, len, hold_permit(stream, permit)))
+}
+
+pub async fn deny_if_video_too_long(video_id: &str, quality: &str) -> Result<(), FetchError> {
+    let cap = crate::guard::max_duration_secs(quality);
+    match video_length_secs(video_id).await {
+        Some(dur) if dur > cap => {
+            let mins = cap / 60;
+            let label = crate::guard::quality_label(quality);
+            Err(FetchError::new(
+                400,
+                format!(
+                    "This video is too long for {label} (max {mins} min). Try 360p/480p, or download audio."
+                ),
+            ))
+        }
+        None if crate::guard::video_quality_tier(quality) != "sd" => Err(FetchError::new(
+            400,
+            "Could not read this video's length. Try 360p or 480p, or download audio.",
+        )),
+        _ => Ok(()),
+    }
+}
+
+pub async fn deny_if_audio_too_long(video_id: &str, _fmt: &str) -> Result<(), FetchError> {
+    let cap = crate::guard::max_audio_duration_secs();
+    match video_length_secs(video_id).await {
+        Some(dur) if dur > cap => {
+            let mins = cap / 60;
+            Err(FetchError::new(
+                400,
+                format!(
+                    "This audio is too long (max {mins} min). Try a shorter video."
+                ),
+            ))
+        }
+        None => Err(FetchError::new(
+            400,
+            "Could not read this video's length. Try a shorter video.",
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn commit_media(
+    headers: Option<&HeaderMap>,
+    kind: crate::guard::MediaKind,
+    quality: &str,
+) -> Result<(), FetchError> {
+    let Some(h) = headers else {
+        return Ok(());
+    };
+    crate::guard::check_media_access(h, kind, quality, true).map_err(|d| FetchError::from_deny(&d))
 }
 
 pub fn normalize_audio_format(raw: Option<&str>) -> &'static str {
@@ -2309,12 +2510,14 @@ fn audio_ytdlp_plan(fmt: &str) -> (&'static str, &'static [&'static str], &'stat
 pub async fn download_audio(
     video_id: &str,
     fmt: &str,
+    headers: Option<&HeaderMap>,
 ) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
     if !is_id(video_id) {
         return Err(FetchError::new(400, "That is not a YouTube video id."));
     }
     let fmt = normalize_audio_format(Some(fmt));
     let (spec, extra, mime, ext) = audio_ytdlp_plan(fmt);
+    deny_if_audio_too_long(video_id, fmt).await?;
     if !extra.is_empty() && !ffmpeg_available() {
         return Err(FetchError::new(
             503,
@@ -2326,14 +2529,12 @@ pub async fn download_audio(
         for pick in &picks {
             match peek_audio_len(&pick.url, &pick.ua).await {
                 Ok(len) if len > 0 && len <= GV_CHUNK => {
-                    return open_audio_stream(&pick.url, &pick.ua)
-                        .await
-                        .map(|(n, s)| {
-                            let mut p = pick.clone();
-                            p.mime = mime.into();
-                            p.ext = ext.into();
-                            (p, n, s)
-                        });
+                    let (n, s) = open_audio_stream(&pick.url, &pick.ua).await?;
+                    commit_media(headers, crate::guard::MediaKind::Audio, "")?;
+                    let mut p = pick.clone();
+                    p.mime = mime.into();
+                    p.ext = ext.into();
+                    return Ok((p, n, s));
                 }
                 _ => {}
             }
@@ -2344,14 +2545,18 @@ pub async fn download_audio(
             .unwrap_or_else(|| placeholder_pick(video_id));
         meta.mime = mime.into();
         meta.ext = ext.into();
-        return stream_ytdlp(
+        let permit = REMUX.clone().try_acquire_owned().map_err(|_| remux_busy())?;
+        let (pick, len, stream) = stream_ytdlp(
             video_id,
             meta,
             spec,
             extra,
             "Could not start audio download",
+            "800M",
         )
-        .await;
+        .await?;
+        commit_media(headers, crate::guard::MediaKind::Audio, "")?;
+        return Ok((pick, len, hold_permit(stream, permit)));
     }
     let mut meta = load_audio_picks(video_id)
         .await
@@ -2360,14 +2565,18 @@ pub async fn download_audio(
         .unwrap_or_else(|| placeholder_pick(video_id));
     meta.mime = mime.into();
     meta.ext = ext.into();
-    stream_ytdlp(
+    let permit = REMUX.clone().try_acquire_owned().map_err(|_| remux_busy())?;
+    let (pick, len, stream) = stream_ytdlp(
         video_id,
         meta,
         spec,
         extra,
         "Could not start audio download",
+        "800M",
     )
-    .await
+    .await?;
+    commit_media(headers, crate::guard::MediaKind::Audio, "")?;
+    Ok((pick, len, hold_permit(stream, permit)))
 }
 
 /// Store a transcript fetched in the user's browser (extension / bookmarklet).
@@ -2438,8 +2647,8 @@ pub fn ingest_client_doc(
     } else {
         lang
     };
-    cache_put(format!("{video_id}|{lang_key}|{tlang}"), doc.clone());
-    cache_put(format!("{video_id}||"), doc.clone());
+    cache_put_if_absent(format!("{video_id}|{lang_key}|{tlang}"), doc.clone());
+    cache_put_if_absent(format!("{video_id}||"), doc.clone());
     Ok(doc)
 }
 
@@ -2641,16 +2850,27 @@ mod tests {
 
     #[test]
     fn video_quality_and_format_strings() {
-        assert_eq!(normalize_video_quality(None), "720");
+        assert_eq!(normalize_video_quality(None), "480");
         assert_eq!(normalize_video_quality(Some("1080p")), "1080");
         assert_eq!(normalize_video_quality(Some("best")), "best");
         assert_eq!(normalize_video_quality(Some("4k")), "2160");
         assert_eq!(normalize_video_quality(Some("1440p")), "1440");
         let muxed = video_ytdlp_format("720", false);
         assert!(muxed.contains("height<=720"));
+        assert!(muxed.contains("avc1"));
         let dash = video_ytdlp_format("1080", true);
         assert!(dash.contains("bv*"));
-        assert!(dash.contains("ext=mp4"));
+        assert!(dash.contains("vcodec^=avc1"));
+        assert!(dash.contains("ext=m4a"));
+        // Progressive H.264 first (faster start), then DASH avc1+m4a.
+        assert!(dash.starts_with("b[height<=1080][ext=mp4][vcodec^=avc1]"));
+        // Must not fall back to unfiltered best/bv (VP9/AV1 → black video on phones).
+        assert!(!dash.contains("/b[height"));
+        assert!(!dash.ends_with("/b"));
+        assert!(!dash.contains("bv*[height<=1080]+ba/"));
+        let worst = video_ytdlp_format("720", true);
+        assert!(worst.contains("avc1"));
+        assert!(!worst.contains("/b[height<=720]"));
     }
 
     #[test]
@@ -2729,6 +2949,84 @@ mod tests {
         .unwrap();
         assert_eq!(doc.cues.len(), 1);
         assert!(cache_get("dQw4w9WgXcQ||").is_some());
+    }
+
+    #[test]
+    fn ingest_does_not_overwrite_existing_default_cache() {
+        let first = ingest_client_doc(
+            "cPutIfAbs01".into(),
+            "First".into(),
+            "A".into(),
+            60,
+            "en".into(),
+            "".into(),
+            "".into(),
+            vec![Cue {
+                start_ms: 0,
+                duration_ms: 1000,
+                text: "Hello".into(),
+            }],
+        )
+        .unwrap();
+        assert_eq!(first.cues[0].text, "Hello");
+        let _ = ingest_client_doc(
+            "cPutIfAbs01".into(),
+            "Second".into(),
+            "B".into(),
+            60,
+            "en".into(),
+            "".into(),
+            "".into(),
+            vec![Cue {
+                start_ms: 0,
+                duration_ms: 1000,
+                text: "Pwned".into(),
+            }],
+        )
+        .unwrap();
+        let hit = cache_get("cPutIfAbs01||").expect("default cache");
+        assert_eq!(hit.title, "First");
+        assert_eq!(hit.cues[0].text, "Hello");
+        let lang = cache_get("cPutIfAbs01|en|").expect("lang cache");
+        assert_eq!(lang.cues[0].text, "Hello");
+    }
+
+    #[test]
+    fn cache_put_replaces_same_key() {
+        let a = ingest_client_doc(
+            "cPutReplac1".into(),
+            "A".into(),
+            "".into(),
+            10,
+            "en".into(),
+            "".into(),
+            "".into(),
+            vec![Cue {
+                start_ms: 0,
+                duration_ms: 1000,
+                text: "One".into(),
+            }],
+        )
+        .unwrap();
+        let b = ingest_client_doc(
+            "cPutReplac2".into(),
+            "B".into(),
+            "".into(),
+            10,
+            "en".into(),
+            "".into(),
+            "".into(),
+            vec![Cue {
+                start_ms: 0,
+                duration_ms: 1000,
+                text: "Two".into(),
+            }],
+        )
+        .unwrap();
+        cache_put("cPutReplac1||".into(), b.clone());
+        let hit = cache_get("cPutReplac1||").unwrap();
+        assert_eq!(hit.cues[0].text, "Two");
+        assert_eq!(a.cues[0].text, "One");
     }
 
     #[test]
