@@ -2,25 +2,62 @@ use resuma::prelude::*;
 
 use crate::family::Mode;
 
-pub fn related(current: Mode) -> View {
+pub fn related(current: Mode, es: bool) -> View {
     let cards = Mode::all()
         .into_iter()
         .filter(|m| *m != current)
         .map(|m| {
-            let href = m.landing_path().to_string();
-            let label = match m {
-                Mode::Text => "YouTube to text",
-                Mode::Audio => "YouTube to MP3",
-                Mode::Translate => "Translate captions",
-                Mode::Summary => "Chapter summary",
-                Mode::Srt => "Download SRT / VTT",
+            let href = if es {
+                m.es_path().to_string()
+            } else {
+                m.landing_path().to_string()
             };
-            let hint = match m {
-                Mode::Text => "Searchable transcript from public captions.",
-                Mode::Audio => "Save the soundtrack, then stay on the same video.",
-                Mode::Translate => "Keep timestamps. YouTube tlang, not a chat paste.",
-                Mode::Summary => "Extractive recap plus a prompt for your own model.",
-                Mode::Srt => "Timed subtitle files for players and editors.",
+            let (label, hint) = if es {
+                match m {
+                    Mode::Text => (
+                        "YouTube a texto",
+                        "Transcripción buscable desde subtítulos públicos.",
+                    ),
+                    Mode::Audio => (
+                        "YouTube a MP3",
+                        "Guarda la banda sonora y sigue en el mismo video.",
+                    ),
+                    Mode::Translate => (
+                        "Traducir subtítulos",
+                        "Conserva tiempos. YouTube tlang, no un chat.",
+                    ),
+                    Mode::Summary => (
+                        "Resumen por capítulos",
+                        "Recap extractivo más un prompt para tu modelo.",
+                    ),
+                    Mode::Srt => (
+                        "Descargar SRT / VTT",
+                        "Subtítulos temporizados para reproductores.",
+                    ),
+                }
+            } else {
+                match m {
+                    Mode::Text => (
+                        "YouTube to text",
+                        "Searchable transcript from public captions.",
+                    ),
+                    Mode::Audio => (
+                        "YouTube to MP3",
+                        "Save the soundtrack, then stay on the same video.",
+                    ),
+                    Mode::Translate => (
+                        "Translate captions",
+                        "Keep timestamps. YouTube tlang, not a chat paste.",
+                    ),
+                    Mode::Summary => (
+                        "Chapter summary",
+                        "Extractive recap plus a prompt for your own model.",
+                    ),
+                    Mode::Srt => (
+                        "Download SRT / VTT",
+                        "Timed subtitle files for players and editors.",
+                    ),
+                }
             };
             view! {
                 <li>
@@ -33,12 +70,21 @@ pub fn related(current: Mode) -> View {
         })
         .collect::<Vec<_>>();
 
+    let title = if es {
+        "Otras herramientas YouTubeForge"
+    } else {
+        "Other YouTubeForge tools"
+    };
+    let hint = if es {
+        "Misma caja de pegado. Trabajo distinto. Texto, audio, traducción, resumen y SRT tienen página propia para que la búsqueda las encuentre."
+    } else {
+        "Same paste box. Different job. Transcript, audio, translation, summary, and SRT each have their own page so search can find them."
+    };
+
     view! {
-        <nav class="cross-sell" aria-label="Related YouTube tools">
-            <h2>"Other YouTubeForge tools"</h2>
-            <p class="hint">
-                "Same paste box. Different job. Transcript, audio, translation, summary, and SRT each have their own page so search can find them."
-            </p>
+        <nav class="cross-sell" aria-label={if es { "Herramientas YouTube relacionadas" } else { "Related YouTube tools" }}>
+            <h2>{title}</h2>
+            <p class="hint">{hint}</p>
             <ul class="related-grid">{cards}</ul>
         </nav>
     }
@@ -56,6 +102,10 @@ pub fn seo_footer_links() -> View {
             <NavLink href="/youtube-summary">"Summary"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/youtube-to-srt">"SRT"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-a-texto">"ES texto"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-a-mp3">"ES MP3"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/privacy">"Privacy"</NavLink>
             <span aria-hidden="true">" · "</span>

@@ -9,11 +9,13 @@ mod export;
 mod family;
 mod guard;
 mod landing;
+mod landing_es;
 mod langs;
 mod meta_conversions;
 mod site;
 mod pages;
 mod parse;
+mod sitemap;
 mod summary;
 mod tool;
 mod workspace;
@@ -250,16 +252,6 @@ fn redirect_keep_query(dest: &str, uri: Uri) -> Redirect {
     }
 }
 
-async fn redirect_legacy_es(uri: Uri) -> Redirect {
-    let path = uri.path();
-    let dest = crate::family::Mode::all()
-        .into_iter()
-        .find(|m| m.es_path() == path)
-        .map(|m| m.landing_path())
-        .unwrap_or("/");
-    redirect_keep_query(dest, uri)
-}
-
 async fn redirect_youtube_to_mp3(uri: Uri) -> Redirect {
     redirect_keep_query("/youtube-to-audio", uri)
 }
@@ -323,7 +315,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension. Legacy Spanish slugs 301 to these.".into(),
+            "/youtube-to-text (+ /youtube-a-texto ES), /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -357,11 +349,6 @@ async fn main() -> std::io::Result<()> {
         .with_head(head)
         .with_seo_kit(seo_kit())
         .with_sitemap_exclude([
-            "/youtube-a-texto",
-            "/youtube-a-mp3",
-            "/youtube-traductor",
-            "/youtube-resumen",
-            "/youtube-a-srt",
             "/youtube-to-mp3",
             "/developers/welcome",
         ])
@@ -427,11 +414,8 @@ async fn main() -> std::io::Result<()> {
         .route("/v/{id}", get(redirect_video))
         // Common guess from “YouTube to MP3” copy — canonical SEO path is /youtube-to-audio.
         .route("/youtube-to-mp3", get(redirect_youtube_to_mp3))
-        .route("/youtube-a-texto", get(redirect_legacy_es))
-        .route("/youtube-a-mp3", get(redirect_legacy_es))
-        .route("/youtube-traductor", get(redirect_legacy_es))
-        .route("/youtube-resumen", get(redirect_legacy_es))
-        .route("/youtube-a-srt", get(redirect_legacy_es))
+        // Custom sitemap with xhtml hreflang (registered before serve so Flow skips its default).
+        .route("/sitemap.xml", get(crate::sitemap::sitemap))
         .route("/api", get(|| async { Redirect::permanent("/developers") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))

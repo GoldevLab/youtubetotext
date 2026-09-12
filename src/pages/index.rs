@@ -36,9 +36,9 @@ fn idle() -> View {
                 <section class="hero">
                     <div class="hero-copy">
                         <p class="eyebrow">"YouTubeForge"</p>
-                        <h1>"All the YouTube tools you need"</h1>
+                        <h1>"YouTube transcript, MP3, SRT, and more"</h1>
                         <p class="hero-lead">
-                            "Paste a public link once. Pull the transcript, download SRT or audio, translate captions, or grab a short recap — same video, no account."
+                            "Paste a public link once. Get a searchable transcript, download SRT or audio, translate captions, or grab a short recap — same video, no account."
                         </p>
                         {home_search(Mode::Text)}
                     </div>
@@ -86,6 +86,10 @@ fn idle() -> View {
                     <li>
                         <h3><NavLink href="/youtube-to-srt">"SRT / VTT"</NavLink></h3>
                         <p>"Timed subtitle files for VLC, editors, and HTML5 tracks."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/youtube-a-texto">"YouTube a texto"</NavLink></h3>
+                        <p>"Misma herramienta en español: transcripción, audio, SRT y traducción."</p>
                     </li>
                 </ul>
             </section>

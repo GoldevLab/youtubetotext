@@ -23,7 +23,7 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/pricing` | Free web + Basic/Pro API (Lemon Squeezy) |
 | `/developers` | API docs |
 
-`/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`. Legacy Spanish slugs (`/youtube-a-texto`, `/youtube-a-mp3`, `/youtube-traductor`, `/youtube-resumen`, `/youtube-a-srt`) 301 to the English landings.
+`/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`. Spanish landings (`/youtube-a-texto`, `/youtube-a-mp3`, `/youtube-traductor`, `/youtube-resumen`, `/youtube-a-srt`) are full pages with `hreflang` pairs in `/sitemap.xml`.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
