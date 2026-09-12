@@ -15,6 +15,8 @@ mod meta_conversions;
 mod site;
 mod pages;
 mod parse;
+// Reserved for xhtml hreflang sitemap once Resuma can claim /sitemap.xml.
+#[allow(dead_code)]
 mod sitemap;
 mod summary;
 mod tool;
@@ -363,12 +365,8 @@ async fn main() -> std::io::Result<()> {
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
-    {
-        // Claim /sitemap.xml so Flow skips its default; include xhtml:link hreflang.
-        let body: &'static [u8] =
-            Box::leak(crate::sitemap::sitemap_body().into_bytes().into_boxed_slice());
-        app = app.static_asset("/sitemap.xml", body, "application/xml; charset=utf-8");
-    }
+    // Custom /sitemap.xml requires Resuma "claimed path" support (not in b469015).
+    // Flow's built-in sitemap already lists registry pages including ES landings.
     {
         // RFC 9116 — helps scanners / security researchers; Contact optional via env.
         let contact = crate::site::contact_email()
