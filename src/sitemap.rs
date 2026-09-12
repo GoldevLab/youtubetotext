@@ -1,8 +1,5 @@
 //! Custom `/sitemap.xml` with xhtml hreflang pairs for EN/ES landings.
 
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::IntoResponse;
-
 use crate::family::{canonical_url, Mode};
 
 fn escape_xml(s: &str) -> String {
@@ -63,19 +60,6 @@ pub fn sitemap_body() -> String {
 
     xml.push_str("</urlset>");
     xml
-}
-
-pub async fn sitemap() -> impl IntoResponse {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/xml; charset=utf-8"),
-    );
-    headers.insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=3600"),
-    );
-    (StatusCode::OK, headers, sitemap_body())
 }
 
 #[cfg(test)]

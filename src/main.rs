@@ -364,6 +364,12 @@ async fn main() -> std::io::Result<()> {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
     {
+        // Claim /sitemap.xml so Flow skips its default; include xhtml:link hreflang.
+        let body: &'static [u8] =
+            Box::leak(crate::sitemap::sitemap_body().into_bytes().into_boxed_slice());
+        app = app.static_asset("/sitemap.xml", body, "application/xml; charset=utf-8");
+    }
+    {
         // RFC 9116 — helps scanners / security researchers; Contact optional via env.
         let contact = crate::site::contact_email()
             .map(|e| format!("Contact: mailto:{e}\n"))
@@ -414,8 +420,6 @@ async fn main() -> std::io::Result<()> {
         .route("/v/{id}", get(redirect_video))
         // Common guess from “YouTube to MP3” copy — canonical SEO path is /youtube-to-audio.
         .route("/youtube-to-mp3", get(redirect_youtube_to_mp3))
-        // Custom sitemap with xhtml hreflang (registered before serve so Flow skips its default).
-        .route("/sitemap.xml", get(crate::sitemap::sitemap))
         .route("/api", get(|| async { Redirect::permanent("/developers") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
