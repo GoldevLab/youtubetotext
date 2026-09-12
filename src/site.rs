@@ -92,6 +92,15 @@ pub fn head_extras() -> String {
 <script>
 (function(){{
   var id={id:?};
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){{dataLayer.push(arguments);}}
+  window.gtag=gtag;
+  window.__yttTrack=function(name,params){{
+    try{{
+      if(!name)return;
+      gtag('event',String(name),params&&typeof params==='object'?params:{{}});
+    }}catch(_){{}}
+  }};
   function load(){{
     if(window.__yttGaLoaded)return;
     window.__yttGaLoaded=1;
@@ -100,9 +109,6 @@ pub fn head_extras() -> String {
     s.fetchPriority='low';
     s.src='https://www.googletagmanager.com/gtag/js?id='+id;
     s.onload=function(){{
-      window.dataLayer=window.dataLayer||[];
-      function gtag(){{dataLayer.push(arguments);}}
-      window.gtag=gtag;
       gtag('js',new Date());
       gtag('config',id,{{send_page_view:true}});
     }};

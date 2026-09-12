@@ -101,6 +101,9 @@ pub fn home_search(mode: Mode) -> View {
         e.preventDefault();
         if (err) err.hidden = true;
         input?.removeAttribute("aria-invalid");
+        try {
+            globalThis.__yttTrack?.("get_transcript", { mode: String(mode || "text"), location: "home" });
+        } catch (_) {}
         form?.classList.add("is-busy");
         const submitBtn = form?.querySelector('button[type="submit"]');
         if (submitBtn) {

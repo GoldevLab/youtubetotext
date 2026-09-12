@@ -1,4 +1,21 @@
 (() => {
+  const track = (name, params) => {
+    try {
+      if (typeof window.__yttTrack === "function") {
+        window.__yttTrack(name, params || {});
+        return;
+      }
+      window.dataLayer = window.dataLayer || [];
+      if (typeof window.gtag === "function") {
+        window.gtag("event", name, params || {});
+      } else {
+        window.dataLayer.push(["event", name, params || {}]);
+      }
+    } catch (_) {}
+  };
+  window.__yttTrack =
+    typeof window.__yttTrack === "function" ? window.__yttTrack : track;
+
   let stopHero = null;
   const mountCaptionStream = () => {
     if (typeof stopHero === "function") {
@@ -233,6 +250,7 @@
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      track("paste_url", { location: "home" });
 
       const root =
         btn.closest("#ytt-home") ||
@@ -583,6 +601,11 @@
       const href = videoBtn
         ? `/api/video?v=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`
         : `/api/audio?v=${encodeURIComponent(id)}&fmt=${encodeURIComponent(afmt)}`;
+      track(kind === "video" ? "download_video" : "download_audio", {
+        location: "home",
+        quality: kind === "video" ? q : undefined,
+        audio_format: kind === "audio" ? afmt : undefined,
+      });
       void runMediaDownload({
         href,
         kind,

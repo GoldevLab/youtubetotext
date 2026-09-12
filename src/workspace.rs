@@ -763,6 +763,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 e.preventDefault();
                 const vid = ws.dataset.vid || "";
                 const fmt = ws.querySelector("[data-afmt]")?.value || "mp3";
+                try { globalThis.__yttTrack?.("download_audio", { location: "workspace", audio_format: fmt }); } catch (_) {}
                 F.downloadAudio(ws, `/api/audio?v=${encodeURIComponent(vid)}&fmt=${encodeURIComponent(fmt)}`);
                 return;
             }
@@ -771,23 +772,28 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                 e.preventDefault();
                 const vid = ws.dataset.vid || "";
                 const q = ws.querySelector("[data-vq]")?.value || "480";
+                try { globalThis.__yttTrack?.("download_video", { location: "workspace", quality: q }); } catch (_) {}
                 F.startVideoDownload(ws, `/api/video?v=${encodeURIComponent(vid)}&q=${encodeURIComponent(q)}`);
                 return;
             }
             if (t.closest("[data-apply]")) {
                 e.preventDefault();
+                try { globalThis.__yttTrack?.("apply_translate", { location: "workspace" }); } catch (_) {}
                 F.applyLang(ws);
                 return;
             }
             if (t.closest("[data-play]")) {
                 e.preventDefault();
+                try { globalThis.__yttTrack?.("play_embed", { location: "workspace" }); } catch (_) {}
                 F.mountPlayer(ws, 0);
                 return;
             }
             const dl = t.closest("[data-dl]");
             if (dl) {
                 e.preventDefault();
-                F.downloadFmt(ws, dl.getAttribute("data-dl"));
+                const fmt = dl.getAttribute("data-dl") || "";
+                try { globalThis.__yttTrack?.("download_transcript", { location: "workspace", format: fmt }); } catch (_) {}
+                F.downloadFmt(ws, fmt);
                 return;
             }
             const promptBtn = t.closest("[data-prompt]");
@@ -800,6 +806,7 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
                     return;
                 }
                 const body = (prompts[kind] || prompts.summary) + text;
+                try { globalThis.__yttTrack?.("copy_prompt", { location: "workspace", prompt_kind: kind || "summary" }); } catch (_) {}
                 Promise.resolve(F.writeClipboard(body)).then(() => F.setStatus(ws, "Prompt copied — paste it into any AI chat.")).catch(() => F.setStatus(ws, "Could not copy the prompt."));
                 return;
             }
