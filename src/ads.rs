@@ -84,13 +84,15 @@ fn slot_id(placement: &str, size: &str) -> Option<String> {
 }
 
 pub fn head_snippet() -> String {
-    // Tiny deferred loader only — avoid an eager module fetch competing with LCP.
-    // AdSense boots after first engagement (or long idle) inside youtubetotext-ads.js.
+    // Official meta + async loader so AdSense’s site crawler finds the account
+    // without waiting for engagement. Unit fills stay deferred in youtubetotext-ads.js.
     match client_id() {
         Some(id) => format!(
             r#"<link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
 <link rel="dns-prefetch" href="https://googleads.g.doubleclick.net" />
+<meta name="google-adsense-account" content="{id}" />
 <meta name="ytt-adsense-client" content="{id}" />
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={id}" crossorigin="anonymous"></script>
 <script>
 (function(){{
   function load(){{
@@ -98,7 +100,7 @@ pub fn head_snippet() -> String {
     window.__yttAdsJs=1;
     var s=document.createElement('script');
     s.type='module';
-    s.src='/js/youtubetotext-ads.js?v=3';
+    s.src='/js/youtubetotext-ads.js?v=4';
     s.fetchPriority='low';
     document.head.appendChild(s);
   }}
