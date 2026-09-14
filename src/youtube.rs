@@ -2064,6 +2064,13 @@ struct TempStream {
     opened: bool,
 }
 
+impl Drop for TempStream {
+    fn drop(&mut self) {
+        // Client abort / early drop must not leave /tmp/forge-vid-*.mp4 behind.
+        cleanup_temp(self.path.take());
+    }
+}
+
 fn cleanup_temp(path: Option<PathBuf>) {
     if let Some(p) = path {
         let _ = std::fs::remove_file(&p);
@@ -2602,7 +2609,7 @@ pub async fn download_video(
     let permit = REMUX.clone().try_acquire_owned().map_err(|_| remux_busy())?;
     // Must write to disk: `-o -` concatenates DASH streams and produces corrupt MP4s
     // (VLC green/purple banding, phones black picture). Merger only works with a file path.
-    let (pick, len, stream) = stream_ytdlp_file(
+    let remuxed = stream_ytdlp_file(
         video_id,
         meta,
         &spec,
@@ -2610,9 +2617,13 @@ pub async fn download_video(
         "Could not start video download",
         crate::guard::max_filesize_arg(q),
     )
-    .await?;
+    .await;
+    // Remux finished (or failed). Free the slot before the client transfer so other
+    // downloads are not stuck behind a long MP4 upload.
+    drop(permit);
+    let (pick, len, stream) = remuxed?;
     commit_media(headers, crate::guard::MediaKind::Video, q)?;
-    Ok((pick, len, hold_permit(stream, permit)))
+    Ok((pick, len, stream))
 }
 
 pub async fn deny_if_video_too_long(video_id: &str, quality: &str) -> Result<(), FetchError> {

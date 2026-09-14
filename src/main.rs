@@ -9,13 +9,11 @@ mod export;
 mod family;
 mod guard;
 mod landing;
-mod landing_es;
 mod langs;
 mod meta_conversions;
 mod site;
 mod pages;
 mod parse;
-// Reserved for xhtml hreflang sitemap once Resuma can claim /sitemap.xml.
 #[allow(dead_code)]
 mod sitemap;
 mod summary;
@@ -258,6 +256,26 @@ async fn redirect_youtube_to_mp3(uri: Uri) -> Redirect {
     redirect_keep_query("/youtube-to-audio", uri)
 }
 
+async fn redirect_es_texto(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-to-text", uri)
+}
+
+async fn redirect_es_mp3(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-to-audio", uri)
+}
+
+async fn redirect_es_traductor(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-translator", uri)
+}
+
+async fn redirect_es_resumen(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-summary", uri)
+}
+
+async fn redirect_es_srt(uri: Uri) -> Redirect {
+    redirect_keep_query("/youtube-to-srt", uri)
+}
+
 async fn redirect_app_youtube(uri: Uri) -> Redirect {
     match uri.query() {
         Some(q) if !q.is_empty() => Redirect::permanent(&format!("/?{q}")),
@@ -317,7 +335,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text (+ /youtube-a-texto ES), /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension.".into(),
+            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -366,7 +384,7 @@ async fn main() -> std::io::Result<()> {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
     }
     // Custom /sitemap.xml requires Resuma "claimed path" support (not in b469015).
-    // Flow's built-in sitemap already lists registry pages including ES landings.
+    // Flow's built-in sitemap lists registry pages only (English landings after ES removal).
     {
         // RFC 9116 — helps scanners / security researchers; Contact optional via env.
         let contact = crate::site::contact_email()
@@ -418,6 +436,17 @@ async fn main() -> std::io::Result<()> {
         .route("/v/{id}", get(redirect_video))
         // Common guess from “YouTube to MP3” copy — canonical SEO path is /youtube-to-audio.
         .route("/youtube-to-mp3", get(redirect_youtube_to_mp3))
+        // Legacy Spanish SEO landings → English.
+        .route("/youtube-a-texto", get(redirect_es_texto))
+        .route("/youtube-a-texto/", get(redirect_es_texto))
+        .route("/youtube-a-mp3", get(redirect_es_mp3))
+        .route("/youtube-a-mp3/", get(redirect_es_mp3))
+        .route("/youtube-traductor", get(redirect_es_traductor))
+        .route("/youtube-traductor/", get(redirect_es_traductor))
+        .route("/youtube-resumen", get(redirect_es_resumen))
+        .route("/youtube-resumen/", get(redirect_es_resumen))
+        .route("/youtube-a-srt", get(redirect_es_srt))
+        .route("/youtube-a-srt/", get(redirect_es_srt))
         .route("/api", get(|| async { Redirect::permanent("/developers") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))

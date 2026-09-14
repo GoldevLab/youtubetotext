@@ -40,16 +40,6 @@ impl Mode {
         }
     }
 
-    pub fn es_path(self) -> &'static str {
-        match self {
-            Self::Text => "/youtube-a-texto",
-            Self::Audio => "/youtube-a-mp3",
-            Self::Translate => "/youtube-traductor",
-            Self::Summary => "/youtube-resumen",
-            Self::Srt => "/youtube-a-srt",
-        }
-    }
-
     pub fn nav_label(self) -> &'static str {
         match self {
             Self::Text => "Transcript",

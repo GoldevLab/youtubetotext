@@ -87,10 +87,6 @@ fn idle() -> View {
                         <h3><NavLink href="/youtube-to-srt">"SRT / VTT"</NavLink></h3>
                         <p>"Timed subtitle files for VLC, editors, and HTML5 tracks."</p>
                     </li>
-                    <li>
-                        <h3><NavLink href="/youtube-a-texto">"YouTube a texto"</NavLink></h3>
-                        <p>"Misma herramienta en español: transcripción, audio, SRT y traducción."</p>
-                    </li>
                 </ul>
             </section>
             {extension_install()}

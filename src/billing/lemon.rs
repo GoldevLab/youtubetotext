@@ -13,6 +13,7 @@ const LEMON_API: &str = "https://api.lemonsqueezy.com/v1";
 pub fn configured() -> bool {
     api_key().is_some()
         && store_id().is_some()
+        && webhook_secret().is_some()
         && variant_id(Plan::Basic).is_some()
         && variant_id(Plan::Pro).is_some()
 }
