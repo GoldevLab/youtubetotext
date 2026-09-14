@@ -335,7 +335,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /pricing /developers /privacy /terms /extension.".into(),
+            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /privacy /terms /extension.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -370,6 +370,8 @@ async fn main() -> std::io::Result<()> {
         .with_seo_kit(seo_kit())
         .with_sitemap_exclude([
             "/youtube-to-mp3",
+            "/pricing",
+            "/developers",
             "/developers/welcome",
         ])
         .with_html_theme(
@@ -447,7 +449,7 @@ async fn main() -> std::io::Result<()> {
         .route("/youtube-resumen/", get(redirect_es_resumen))
         .route("/youtube-a-srt", get(redirect_es_srt))
         .route("/youtube-a-srt/", get(redirect_es_srt))
-        .route("/api", get(|| async { Redirect::permanent("/developers") }))
+        .route("/api", get(|| async { Redirect::permanent("/") }))
         .route("/api/transcript", get(api::transcript).options(api::preflight))
         .route("/api/audio", get(api::audio).options(api::preflight))
         .route("/api/video", get(api::video).options(api::preflight))

@@ -1,5 +1,5 @@
-//! App JSON endpoints used by the site UI, the optional browser extension,
-//! and paid API keys (`x-api-key` from Lemon Squeezy subscriptions).
+//! App JSON endpoints used by the site UI and the optional browser extension.
+//! Paid public API keys are gated by `billing::PUBLIC_API_ENABLED`.
 
 use axum::body::Body;
 use axum::extract::Query;

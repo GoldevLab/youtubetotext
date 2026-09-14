@@ -16,8 +16,16 @@ use serde::Deserialize;
 
 use crate::guard;
 
+/// Paid public API + Lemon checkout. Flip to `true` when ready to sell keys again.
+pub const PUBLIC_API_ENABLED: bool = false;
+
+const API_OFF_MSG: &str = "The YouTubeForge API is temporarily unavailable.";
+
 /// Resolve a paid subscriber from `x-api-key` / Bearer (not ops `FORGE_API_KEYS`).
 pub fn subscriber_from_headers(headers: &HeaderMap) -> Option<ApiKeyRecord> {
+    if !PUBLIC_API_ENABLED {
+        return None;
+    }
     let raw = guard::api_key_from_headers(headers)?;
     lookup_raw_key(&raw)
 }
@@ -26,8 +34,13 @@ pub fn is_paid_headers(headers: &HeaderMap) -> bool {
     subscriber_from_headers(headers).is_some()
 }
 
+#[allow(dead_code)] // used by /pricing + /developers when PUBLIC_API_ENABLED is flipped back on
 pub fn billing_ready() -> bool {
-    lemon::configured()
+    PUBLIC_API_ENABLED && lemon::configured()
+}
+
+fn api_disabled() -> Response {
+    json_err(StatusCode::SERVICE_UNAVAILABLE, API_OFF_MSG)
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,6 +49,9 @@ pub struct CheckoutQuery {
 }
 
 pub async fn checkout(Query(q): Query<CheckoutQuery>, _headers: HeaderMap) -> Response {
+    if !PUBLIC_API_ENABLED {
+        return api_disabled();
+    }
     if !lemon::configured() {
         return json_err(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -61,6 +77,9 @@ pub struct WelcomeQuery {
 
 /// After Lemon redirect: reveal API key once when webhook has provisioned it.
 pub async fn reveal(Query(q): Query<WelcomeQuery>) -> Response {
+    if !PUBLIC_API_ENABLED {
+        return api_disabled();
+    }
     let Some(token) = q.t.as_deref().map(str::trim).filter(|s| {
         s.starts_with("ft_") && s.len() >= 12 && s.len() <= 80
             && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -116,6 +135,9 @@ pub async fn reveal(Query(q): Query<WelcomeQuery>) -> Response {
 }
 
 pub async fn webhook(headers: HeaderMap, body: Bytes) -> Response {
+    if !PUBLIC_API_ENABLED {
+        return api_disabled();
+    }
     if !lemon::verify_webhook(&headers, &body) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -336,6 +358,9 @@ fn usage_json(rec: &ApiKeyRecord) -> serde_json::Value {
 
 /// GET /api/v1/me — usage for the calling key.
 pub async fn me(headers: HeaderMap) -> Response {
+    if !PUBLIC_API_ENABLED {
+        return api_disabled();
+    }
     if let Some(rec) = subscriber_from_headers(&headers) {
         return Json(serde_json::json!({
             "ok": true,

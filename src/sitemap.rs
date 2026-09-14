@@ -37,8 +37,6 @@ pub fn sitemap_body() -> String {
 
     for path in [
         "/extension",
-        "/pricing",
-        "/developers",
         "/privacy",
         "/terms",
     ] {

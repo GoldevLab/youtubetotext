@@ -18,19 +18,18 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/youtube-summary` | Chapter recap |
 | `/youtube-to-srt` | SRT / VTT |
 | `/privacy` | Privacy / AdSense |
-| `/terms` | Terms (captions, MP3, video, API) |
+| `/terms` | Terms (captions, MP3, video) |
 | `/extension` | Chrome extension |
-| `/pricing` | Free web + Basic/Pro API (Lemon Squeezy) |
-| `/developers` | API docs |
 
 `/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`. Legacy Spanish paths (`/youtube-a-texto`, `/youtube-a-mp3`, `/youtube-traductor`, `/youtube-resumen`, `/youtube-a-srt`) permanently redirect to the English landings.
 
 - Paste a YouTube URL (watch, shorts, `youtu.be`, or a raw video id)
 - Search, trim, copy, download **TXT, SRT, VTT, Markdown, JSON**
 - Download audio when YouTube exposes a plain audio URL
-- Optional **paid API** (`x-api-key`) via Lemon Squeezy subscriptions
 
-Website `/api/*` routes power the UI (same-site). Paid keys unlock the same endpoints without proof-of-work. Downloads on the free web still need a short-lived HMAC ticket after local SHA-256 PoW. Shared `/?v=` transcript links stay open.
+**Paid public API is paused** (`PUBLIC_API_ENABLED = false` in `src/billing/mod.rs`). `/pricing` and `/developers` show a short notice; Lemon checkout / webhooks / `/api/v1/me` return 503. Flip the flag when ready to sell keys again.
+
+Website `/api/*` routes power the UI (same-site). Downloads on the free web still need a short-lived HMAC ticket after local SHA-256 PoW. Shared `/?v=` transcript links stay open.
 
 ## Optional env (do not invent values)
 
@@ -54,12 +53,15 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `META_TEST_EVENT_CODE` (optional) | Events Manager test code while verifying CAPI |
 | `GATE_SECRET` (optional) | 32-byte hex HMAC key for download tickets; auto-generated under `RESUMA_DATA_DIR` if unset |
 
-### Lemon Squeezy setup
+### Lemon Squeezy setup (paused)
+
+Public API sales are off (`PUBLIC_API_ENABLED = false`). When re-enabling:
 
 1. Create two subscription products/variants: **Basic $9/mo**, **Pro $29/mo**.
 2. Set the secrets above on Fly.
 3. Webhook URL: `https://forgeyt.com/api/billing/webhook` — events: `subscription_created`, `subscription_updated`, `subscription_expired`, `subscription_cancelled`, `subscription_paused`, `subscription_resumed`, `order_created`.
 4. Checkout: `/api/billing/checkout?plan=basic|pro` → Lemon → `/developers/welcome?t=…` reveals the key once.
+5. Set `PUBLIC_API_ENABLED` to `true` in `src/billing/mod.rs` and redeploy.
 
 **You do in Google / Meta (not in git):**
 1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml`.
