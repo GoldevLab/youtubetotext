@@ -291,7 +291,7 @@ const HEAD: &str = r##"
 <link rel="preload" href="/themes.css" as="style" />
 <link rel="preload" href="/css/youtubetotext.css?v=r5" as="style" />
 <link rel="stylesheet" href="/themes.css" />
-<script type="module" src="/js/youtubetotext.js?v=16" fetchpriority="low"></script>
+<script type="module" src="/js/youtubetotext.js?v=17" fetchpriority="low"></script>
 "##;
 
 fn seo_kit() -> SeoKit {
@@ -399,7 +399,7 @@ async fn main() -> std::io::Result<()> {
             precache_paths: vec![
                 "/themes.css".into(),
                 "/css/youtubetotext.css?v=r5".into(),
-                "/js/youtubetotext.js?v=16".into(),
+                "/js/youtubetotext.js?v=17".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),
                 "/icons/icon-512.png".into(),
