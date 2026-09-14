@@ -1,14 +1,36 @@
-Name: YouTubeForge
-Short (≤132): Get a searchable YouTube transcript. Opens YouTubeForge. Free, no account.
+Name: YouTubeForge — YouTube Transcript & SRT
+Short (≤132): YouTube transcript in one click: searchable captions, SRT/VTT, open on forgeyt.com. Free, no account.
 Category: Productivity
+
+Detailed description:
+YouTubeForge grabs public captions from the YouTube watch page you are on and opens a searchable transcript on forgeyt.com — free, no account.
+
+What you can do after:
+• Search lines and jump timestamps
+• Copy text or Markdown
+• Download SRT / VTT subtitle files
+• Translate captions or save audio (MP3) on the same result page
+
+How it works:
+1. Open any public YouTube video that has captions (human or auto).
+2. Click “Get transcript” on the page or the toolbar icon.
+3. Captions are read in your browser, sent to YouTubeForge, and the result opens at forgeyt.com/?v=…
 
 Single purpose: On a YouTube watch page, fetch public captions in this browser and open the transcript on YouTubeForge.
 
 Privacy: https://forgeyt.com/privacy
 Support: https://forgeyt.com/extension
+Homepage: https://forgeyt.com/extension
 
 Permission justification:
 - activeTab / youtube.com: read the video id and fetch public captions the tab can already see
 - forgeyt.com: POST /api/ingest then open /?v=
 
 Do not put AdSense in the extension. Ads are only on the website.
+
+Store listing checklist (v1.0.1):
+1. Zip the extension/ folder contents (not the repo root).
+2. Chrome Web Store Developer Dashboard → your item → Package → Upload new package.
+3. Paste Name + Short + Detailed from this file.
+4. Screenshots: watch page with button + result on forgeyt.com.
+5. Submit for review. After publish, keep Fly CHROME_STORE_URL pointed at the listing.
