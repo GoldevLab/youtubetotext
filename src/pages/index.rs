@@ -90,6 +90,27 @@ fn idle() -> View {
                 </ul>
             </section>
             {extension_install()}
+            <section class="features" aria-labelledby="guides-title">
+                <h2 id="guides-title">"Guides"</h2>
+                <p class="hint">
+                    "Short pages for the searches people type — then the same paste box."
+                </p>
+                <ul class="feature-grid">
+                    <li>
+                        <h3><NavLink href="/guides/youtube-transcript">"How to get a YouTube transcript"</NavLink></h3>
+                        <p>"Paste a public link, search lines, copy or download. No account."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/guides/srt-vs-vtt">"SRT vs VTT"</NavLink></h3>
+                        <p>"Which subtitle file to download for editors vs the web."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/guides/youtube-to-mp3">"YouTube to MP3"</NavLink></h3>
+                        <p>"Save the soundtrack when you need audio, not text."</p>
+                    </li>
+                </ul>
+                <p><NavLink href="/guides">"All guides"</NavLink></p>
+            </section>
             <section class="faq" aria-labelledby="faq-title">
                 <h2 id="faq-title">"FAQ"</h2>
                 <div class="faq-list">

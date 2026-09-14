@@ -8,6 +8,7 @@ mod cross_sell;
 mod export;
 mod family;
 mod guard;
+mod guides;
 mod landing;
 mod langs;
 mod meta_conversions;
@@ -307,7 +308,7 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preload" href="/themes.css" as="style" />
-<link rel="preload" href="/css/youtubetotext.css?v=r5" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r6" as="style" />
 <link rel="stylesheet" href="/themes.css" />
 <script type="module" src="/js/youtubetotext.js?v=18" fetchpriority="low"></script>
 "##;
@@ -335,7 +336,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. /privacy /terms /extension.".into(),
+            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. Guides: /guides, /guides/youtube-transcript, /guides/srt-vs-vtt, /guides/youtube-to-mp3. /privacy /terms /extension.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -380,7 +381,7 @@ async fn main() -> std::io::Result<()> {
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r5")
+        .with_stylesheet("/css/youtubetotext.css?v=r6")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -418,7 +419,7 @@ async fn main() -> std::io::Result<()> {
             icon_char: Some("F".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r5".into(),
+                "/css/youtubetotext.css?v=r6".into(),
                 "/js/youtubetotext.js?v=18".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),

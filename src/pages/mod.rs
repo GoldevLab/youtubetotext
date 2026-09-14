@@ -1,6 +1,10 @@
 pub mod developers;
 pub mod developers_welcome;
 pub mod extension;
+pub mod guide_srt_vs_vtt;
+pub mod guide_youtube_to_mp3;
+pub mod guide_youtube_transcript;
+pub mod guides;
 pub mod index;
 pub mod pricing;
 pub mod privacy;

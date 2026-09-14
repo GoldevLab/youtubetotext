@@ -239,6 +239,7 @@ fn render_landing(mode: Mode, landing: crate::family::Landing) -> View {
             </section>
 
             {crate::cross_sell::related(mode)}
+            {crate::cross_sell::guides_nav(None)}
         </main>
     }
 }

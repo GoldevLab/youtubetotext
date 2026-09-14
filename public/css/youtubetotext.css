@@ -974,6 +974,28 @@ select:focus-visible {
   min-width: 0;
 }
 
+.guide-article {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding-top: 0.5rem;
+}
+
+.guide-section {
+  margin: 0 0 1.35rem;
+}
+
+.guide-section h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.guide-section p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .site-footer {
   view-transition-name: site-footer;
   max-width: var(--max);

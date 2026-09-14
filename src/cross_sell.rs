@@ -65,11 +65,46 @@ pub fn seo_footer_links() -> View {
             <span aria-hidden="true">" · "</span>
             <NavLink href="/youtube-to-srt">"SRT"</NavLink>
             <span aria-hidden="true">" · "</span>
+            <NavLink href="/guides">"Guides"</NavLink>
+            <span aria-hidden="true">" · "</span>
             <NavLink href="/privacy">"Privacy"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/terms">"Terms"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/extension">"Extension"</NavLink>
+        </nav>
+    }
+}
+
+pub fn guides_nav(current_path: Option<&str>) -> View {
+    let cards = crate::guides::ALL
+        .iter()
+        .filter(|g| current_path != Some(g.path))
+        .map(|g| {
+            let href = g.path.to_string();
+            let blurb = g.lead;
+            let label = g.h1;
+            view! {
+                <li>
+                    <a href={href} class="related-card" data-r-nav="true">
+                        <strong>{label}</strong>
+                        <span>{blurb}</span>
+                    </a>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! {
+        <nav class="cross-sell guides-nav" aria-label="Guides">
+            <h2>"Guides"</h2>
+            <p class="hint">
+                "Short explainers for transcript, subtitles, and audio — then the same paste box."
+            </p>
+            <ul class="related-grid">{cards}</ul>
+            <p>
+                <NavLink href="/guides">"All guides"</NavLink>
+            </p>
         </nav>
     }
 }

@@ -36,11 +36,15 @@ pub fn sitemap_body() -> String {
     }
 
     for path in [
+        "/guides",
+        "/guides/youtube-transcript",
+        "/guides/srt-vs-vtt",
+        "/guides/youtube-to-mp3",
         "/extension",
         "/privacy",
         "/terms",
     ] {
-        xml.push_str(&url_entry(&canonical_url(path), "0.6", "monthly"));
+        xml.push_str(&url_entry(&canonical_url(path), "0.7", "monthly"));
     }
 
     xml.push_str("</urlset>");
@@ -52,10 +56,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sitemap_lists_english_landings_only() {
+    fn sitemap_lists_english_landings_and_guides() {
         let body = sitemap_body();
         assert!(body.contains("/youtube-to-text"));
         assert!(body.contains("/youtube-to-audio"));
+        assert!(body.contains("/guides/youtube-transcript"));
         assert!(!body.contains("/youtube-a-texto"));
         assert!(!body.contains("hreflang"));
         assert!(!body.contains("/developers/welcome"));

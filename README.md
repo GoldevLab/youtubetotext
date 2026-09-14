@@ -20,6 +20,10 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 | `/privacy` | Privacy / AdSense |
 | `/terms` | Terms (captions, MP3, video) |
 | `/extension` | Chrome extension |
+| `/guides` | SEO guides (transcript, SRT vs VTT, MP3) |
+| `/guides/youtube-transcript` | How to get a YouTube transcript |
+| `/guides/srt-vs-vtt` | SRT vs VTT |
+| `/guides/youtube-to-mp3` | YouTube to MP3 |
 
 `/v/{id}` still redirects to `/?v=`. Canonical origin: `SITE_URL=https://forgeyt.com`. Legacy Spanish paths (`/youtube-a-texto`, `/youtube-a-mp3`, `/youtube-traductor`, `/youtube-resumen`, `/youtube-a-srt`) permanently redirect to the English landings.
 
@@ -76,9 +80,10 @@ Public API sales are off (`PUBLIC_API_ENABLED = false`). When re-enabling:
 5. Set `PUBLIC_API_ENABLED` to `true` in `src/billing/mod.rs` and redeploy.
 
 **You do in Google / Meta (not in git):**
-1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml`.
+1. [Search Console](https://search.google.com/search-console) → add property `https://forgeyt.com` → verify (DNS or put the token in `GSC_VERIFICATION`) → Sitemaps → submit `https://forgeyt.com/sitemap.xml` → request indexing for `/`, `/youtube-to-text`, `/guides/youtube-transcript`.
 2. [AdSense](https://www.google.com/adsense/) → Sites → add `forgeyt.com` → create a responsive Display unit → set `ADSENSE_CLIENT` + `ADSENSE_SLOT` as Fly secrets (then `/ads.txt` stops 404).
 3. [Meta Events Manager](https://business.facebook.com/events_manager) → Connect data source → Web → Pixel → copy Pixel ID → `fly secrets set META_PIXEL_ID=123456789012345`. For Conversions API (recommended): generate a token under Settings → Conversions API → `fly secrets set PRIVATE_PIXEL_TOKEN=…`. Pixel + CAPI share `event_id` on ViewContent (`?v=`) so Meta dedupes. Optional: `META_TEST_EVENT_CODE` while testing. Verify with Meta Pixel Helper / Test Events.
+4. Chrome Web Store: update listing title/description to match `extension/manifest.json` (transcript + SRT keywords) after you publish `1.0.1`.
 
 `youtubetotext.fly.dev` page traffic redirects to `forgeyt.com` (probes `/health` stay on Fly).
 
