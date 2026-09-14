@@ -2015,6 +2015,202 @@ fn hold_permit(
     ))
 }
 
+/// Stream a finished file, deleting it when the client finishes or aborts.
+fn stream_temp_file(path: PathBuf) -> AudioByteStream {
+    Box::pin(stream::unfold(
+        TempStream {
+            reader: None,
+            path: Some(path),
+            opened: false,
+        },
+        |mut st| async move {
+            if !st.opened {
+                st.opened = true;
+                let Some(path) = st.path.as_ref() else {
+                    return None;
+                };
+                match tokio::fs::File::open(path).await {
+                    Ok(f) => {
+                        st.reader = Some(tokio_util::io::ReaderStream::new(f));
+                    }
+                    Err(e) => {
+                        cleanup_temp(st.path.take());
+                        return Some((Err(e), st));
+                    }
+                }
+            }
+            let Some(reader) = st.reader.as_mut() else {
+                cleanup_temp(st.path.take());
+                return None;
+            };
+            match reader.next().await {
+                Some(Ok(chunk)) => Some((Ok(chunk), st)),
+                Some(Err(e)) => {
+                    cleanup_temp(st.path.take());
+                    Some((Err(e), st))
+                }
+                None => {
+                    cleanup_temp(st.path.take());
+                    None
+                }
+            }
+        },
+    ))
+}
+
+struct TempStream {
+    reader: Option<tokio_util::io::ReaderStream<tokio::fs::File>>,
+    path: Option<PathBuf>,
+    opened: bool,
+}
+
+fn cleanup_temp(path: Option<PathBuf>) {
+    if let Some(p) = path {
+        let _ = std::fs::remove_file(&p);
+    }
+}
+
+fn forge_temp_mp4(video_id: &str) -> PathBuf {
+    let mut rnd = [0u8; 8];
+    let _ = getrandom::getrandom(&mut rnd);
+    let mut hex = String::with_capacity(16);
+    for b in rnd {
+        hex.push(char::from_digit((b >> 4) as u32, 16).unwrap_or('0'));
+        hex.push(char::from_digit((b & 0xf) as u32, 16).unwrap_or('0'));
+    }
+    PathBuf::from(format!("/tmp/forge-vid-{video_id}-{hex}.mp4"))
+}
+
+/// Download + merge to a real file, then stream it.
+///
+/// yt-dlp `-o -` does **not** mux DASH A/V — it concatenates streams to stdout,
+/// which produces the green/purple garbage VLC shows. Merger only works on disk.
+async fn stream_ytdlp_file(
+    video_id: &str,
+    mut pick: AudioPick,
+    format: &str,
+    extra: &[&str],
+    fail: &str,
+    max_filesize: &str,
+) -> Result<(AudioPick, u64, AudioByteStream), FetchError> {
+    let bin = ytdlp_path().ok_or_else(|| {
+        FetchError::new(
+            503,
+            "Media download is not available on this server yet. Try again after the next deploy.",
+        )
+    })?;
+    let out = forge_temp_mp4(video_id);
+    let out_s = out.to_string_lossy().into_owned();
+    let url = format!("https://www.youtube.com/watch?v={video_id}");
+    let mut cmd = tokio::process::Command::new(bin);
+    if Path::new("/usr/bin/ffmpeg").is_file() {
+        cmd.env("FFMPEG", "/usr/bin/ffmpeg");
+        cmd.env("PATH", "/usr/bin:/usr/local/bin");
+    }
+    let mut child = cmd
+        .args([
+            "-f",
+            format,
+            "-o",
+            &out_s,
+            "--no-progress",
+            "--no-warnings",
+            "--no-playlist",
+            "--no-mtime",
+            "--max-filesize",
+            max_filesize,
+            "--retries",
+            "8",
+            "--fragment-retries",
+            "8",
+            "--retry-sleep",
+            "2",
+            "--socket-timeout",
+            "30",
+            "--concurrent-fragments",
+            "4",
+            "--buffer-size",
+            "64K",
+            "--http-chunk-size",
+            "10M",
+            "--no-part",
+        ])
+        .args(extra)
+        .args(["--", &url])
+        .env("HOME", "/tmp")
+        .env("XDG_CACHE_HOME", "/tmp")
+        .env("TMPDIR", "/tmp")
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| FetchError::new(502, format!("{fail} ({e}).")))?;
+
+    let stderr = child.stderr.take();
+    let waited = tokio::time::timeout(YTDLP_FIRST_BYTE, child.wait()).await;
+    match waited {
+        Ok(Ok(status)) if status.success() => {}
+        Ok(Ok(_)) => {
+            let hint = read_ytdlp_stderr(stderr).await;
+            cleanup_temp(Some(out));
+            let msg = if hint.is_empty() {
+                format!("{fail}. Try a lower quality or a shorter public video.")
+            } else {
+                format!("{fail}: {hint}")
+            };
+            return Err(FetchError::new(502, msg));
+        }
+        Ok(Err(e)) => {
+            cleanup_temp(Some(out));
+            return Err(FetchError::new(502, format!("{fail} ({e}).")));
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            cleanup_temp(Some(out));
+            return Err(FetchError::new(
+                504,
+                "This download is taking too long to finish (common on 1–2h videos at high quality). Try 360p or 480p, or download audio instead.",
+            ));
+        }
+    }
+
+    let meta = match tokio::fs::metadata(&out).await {
+        Ok(m) => m,
+        Err(_) => {
+            cleanup_temp(Some(out));
+            return Err(FetchError::new(
+                502,
+                format!("{fail}. The merged file was not created. Try another quality."),
+            ));
+        }
+    };
+    let len = meta.len();
+    if len < 2048 || !mp4_has_ftyp(&out).await {
+        cleanup_temp(Some(out));
+        return Err(FetchError::new(
+            502,
+            "YouTube returned a broken video file. Try another quality or audio instead.",
+        ));
+    }
+    if pick.ext.is_empty() {
+        pick.ext = "mp4".into();
+    }
+    Ok((pick, len, stream_temp_file(out)))
+}
+
+async fn mp4_has_ftyp(path: &Path) -> bool {
+    use tokio::io::AsyncReadExt;
+    let Ok(mut f) = tokio::fs::File::open(path).await else {
+        return false;
+    };
+    let mut buf = [0u8; 12];
+    if f.read_exact(&mut buf).await.is_err() {
+        return false;
+    }
+    &buf[4..8] == b"ftyp"
+}
+
 pub type AudioByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
 
 fn rest_audio_chunks(
@@ -2404,7 +2600,9 @@ pub async fn download_video(
     meta.ext = "mp4".into();
     meta.mime = "video/mp4".into();
     let permit = REMUX.clone().try_acquire_owned().map_err(|_| remux_busy())?;
-    let (pick, len, stream) = stream_ytdlp(
+    // Must write to disk: `-o -` concatenates DASH streams and produces corrupt MP4s
+    // (VLC green/purple banding, phones black picture). Merger only works with a file path.
+    let (pick, len, stream) = stream_ytdlp_file(
         video_id,
         meta,
         &spec,
@@ -2871,6 +3069,10 @@ mod tests {
         let worst = video_ytdlp_format("720", true);
         assert!(worst.contains("avc1"));
         assert!(!worst.contains("/b[height<=720]"));
+        let tmp = forge_temp_mp4("dQw4w9WgXcQ");
+        let name = tmp.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        assert!(name.starts_with("forge-vid-dQw4w9WgXcQ-"));
+        assert!(name.ends_with(".mp4"));
     }
 
     #[test]
