@@ -5,3 +5,4 @@
 .resuma/
 **/*.rs.bk
 /target
+*.zip
