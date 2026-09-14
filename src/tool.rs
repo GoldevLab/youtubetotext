@@ -103,6 +103,7 @@ pub fn home_search(mode: Mode) -> View {
         input?.removeAttribute("aria-invalid");
         try {
             globalThis.__yttTrack?.("get_transcript", { mode: String(mode || "text"), location: "home" });
+            globalThis.__yttTrack?.("tool_submit", { mode: String(mode || "text"), location: "home" });
         } catch (_) {}
         form?.classList.add("is-busy");
         const submitBtn = form?.querySelector('button[type="submit"]');

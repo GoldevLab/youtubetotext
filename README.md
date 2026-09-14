@@ -31,6 +31,18 @@ Paste a YouTube URL on `/`. The result lives at `/?v={videoId}&mode=text` (noind
 
 Website `/api/*` routes power the UI (same-site). Downloads on the free web still need a short-lived HMAC ticket after local SHA-256 PoW. Shared `/?v=` transcript links stay open.
 
+### GA4 events to mark as key events
+
+In Analytics → Admin → Events → mark as key event:
+
+| Event | Meaning |
+|---|---|
+| `tool_submit` / `get_transcript` | User pasted a link and opened a result |
+| `transcript_ready` | Captions loaded successfully |
+| `download_ok` | Audio/video download actually started |
+
+Page views alone are noisy; use these for “real use”.
+
 ## Optional env (do not invent values)
 
 Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
@@ -47,7 +59,7 @@ Set these on Fly as secrets. Leave them unset locally unless you have real IDs.
 | `CONTACT_EMAIL` | Shown on `/privacy` |
 | `CHROME_STORE_URL` | Store button on `/extension` |
 | `GSC_VERIFICATION` | Search Console HTML meta tag (paste the content= value) |
-| `GA4_ID` (`G-…`) or `PLAUSIBLE_DOMAIN` | Analytics |
+| `GA4_ID` (`G-…`) or `PLAUSIBLE_DOMAIN` | Analytics (loads on first click/key/touch only — cuts bot noise) |
 | `META_PIXEL_ID` (digits only) | Meta Pixel (deferred; PageView + ViewContent on `?v=`) |
 | `PRIVATE_PIXEL_TOKEN` | Meta Conversions API token — mirrors ViewContent server-side with the same `event_id` as the Pixel |
 | `META_TEST_EVENT_CODE` (optional) | Events Manager test code while verifying CAPI |

@@ -95,12 +95,23 @@ pub fn head_extras() -> String {
   window.dataLayer=window.dataLayer||[];
   function gtag(){{dataLayer.push(arguments);}}
   window.gtag=gtag;
+  var q=[];
+  var ready=false;
   window.__yttTrack=function(name,params){{
     try{{
       if(!name)return;
-      gtag('event',String(name),params&&typeof params==='object'?params:{{}});
+      var p=params&&typeof params==='object'?params:{{}};
+      if(!ready){{q.push([String(name),p]);return;}}
+      gtag('event',String(name),p);
     }}catch(_){{}}
   }};
+  function flush(){{
+    ready=true;
+    while(q.length){{
+      var item=q.shift();
+      try{{gtag('event',item[0],item[1]);}}catch(_){{}}
+    }}
+  }}
   function load(){{
     if(window.__yttGaLoaded)return;
     window.__yttGaLoaded=1;
@@ -111,16 +122,15 @@ pub fn head_extras() -> String {
     s.onload=function(){{
       gtag('js',new Date());
       gtag('config',id,{{send_page_view:true}});
+      flush();
     }};
     document.head.appendChild(s);
   }}
   function arm(){{
-    var start=function(){{load();}};
-    ['pointerdown','keydown','touchstart','scroll'].forEach(function(e){{
-      window.addEventListener(e,start,{{once:true,passive:true}});
+    // Gesture-only: idle/scroll timeouts inflate GA with scrapers and datacenter hits.
+    ['pointerdown','keydown','touchstart'].forEach(function(e){{
+      window.addEventListener(e,load,{{once:true,passive:true}});
     }});
-    if('requestIdleCallback' in window)requestIdleCallback(start,{{timeout:12000}});
-    else window.addEventListener('load',function(){{setTimeout(start,8000);}},{{once:true}});
   }}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',arm,{{once:true}});
   else arm();
@@ -212,12 +222,9 @@ pub fn head_extras() -> String {
     trackViewContent();
   }}
   function arm(){{
-    var start=function(){{boot();}};
-    ['pointerdown','keydown','touchstart','scroll'].forEach(function(e){{
-      window.addEventListener(e,start,{{once:true,passive:true}});
+    ['pointerdown','keydown','touchstart'].forEach(function(e){{
+      window.addEventListener(e,boot,{{once:true,passive:true}});
     }});
-    if('requestIdleCallback' in window)requestIdleCallback(start,{{timeout:12000}});
-    else window.addEventListener('load',function(){{setTimeout(start,8000);}},{{once:true}});
   }}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',arm,{{once:true}});
   else arm();

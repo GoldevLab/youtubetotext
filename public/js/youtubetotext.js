@@ -549,6 +549,12 @@
         closeDlDialog(root);
         fail(e && e.message ? e.message : "Download is not available right now.");
       });
+      try {
+        track("download_ok", {
+          media_kind: kind === "video" ? "video" : "audio",
+          quality: kind === "video" ? String(q || "") : undefined,
+        });
+      } catch (_) {}
       return true;
     } catch (e) {
       fail(e && e.message ? e.message : "Download is not available right now.");

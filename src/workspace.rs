@@ -623,6 +623,17 @@ pub fn workspace(doc: TranscriptDoc, lang: String, tlang: String, mode: String) 
     applyStoredEdits(root);
     applyFilters(root);
     root.dataset.ready = "1";
+    try {
+        if (root.dataset.tracked !== "1") {
+            root.dataset.tracked = "1";
+            const cues = (wsData(root).cues || []).length;
+            globalThis.__yttTrack?.("transcript_ready", {
+                mode: String(root.dataset.mode || "text"),
+                location: "workspace",
+                cue_count: cues,
+            });
+        }
+    } catch (_) {}
     if (root.dataset.mode === "translate") {
         root.querySelector("[data-tlang-select]")?.focus();
     } else if (root.dataset.mode === "summary") {
