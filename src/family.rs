@@ -93,10 +93,12 @@ pub fn canonical_url(path: &str) -> String {
 }
 
 /// Homepage `<title>` — keyword-led for organic discovery; brand still present.
-pub const HOME_TITLE: &str = "YouTube Transcript, MP3 & SRT — Free Tools | YouTubeForge";
+pub const HOME_TITLE: &str =
+    "YouTube Transcript — Transcribe a YouTube Video Free | YouTubeForge";
 pub const HOME_DESCRIPTION: &str =
-    "Free YouTube to text, MP3, SRT/VTT, caption translation, and chapter summaries. Paste a public link — no account.";
+    "Free YouTube transcript tool. Transcribe a public YouTube video from its captions, then copy the text or download TXT, SRT, or VTT. No account.";
 
+#[derive(Clone, Copy)]
 pub struct Landing {
     pub title: &'static str,
     pub description: &'static str,
@@ -127,8 +129,8 @@ const TEXT: Landing = Landing {
     title: "YouTube to Text — Free Transcript from Any Public Video | YouTubeForge",
     description: "Paste a YouTube URL and get a searchable transcript. Copy, download TXT/Markdown, jump timestamps. No account.",
     eyebrow: "YouTube → text",
-    h1: "Turn a YouTube video into a searchable transcript",
-    lead: "This page is for people who want the spoken words as text — notes, quotes, search, or paste into another tool. Captions come from YouTube’s public tracks. We do not re-transcribe audio on our servers.",
+    h1: "YouTube to text from public captions",
+    lead: "This page is the YouTube-to-text job: spoken words as a document you can search, quote, or paste into another tool. Captions come from YouTube’s public tracks. We do not re-transcribe audio on our servers. To transcribe a video, start on the home page.",
     howto_title: "How to get a YouTube transcript",
     howto: [
         ("Paste the link", "Watch, Shorts, youtu.be, or an 11-character id. You land in the app with the transcript beside a privacy-friendly player."),
@@ -264,18 +266,18 @@ const SUMMARY: Landing = Landing {
 };
 
 const SRT: Landing = Landing {
-    title: "YouTube to SRT / VTT — Download Subtitles from Captions | YouTubeForge",
-    description: "Download YouTube captions as SRT or VTT for players, editors, and burns. Timed cues, language tracks, optional translation. Not a screenshot of the transcript.",
-    eyebrow: "YouTube → SRT / VTT",
+    title: "Download YouTube Subtitles — Free SRT and VTT | YouTubeForge",
+    description: "Download YouTube subtitles from a public video as SRT or VTT. Paste a link, pick the caption track, save the file. No account.",
+    eyebrow: "YouTube subtitles download",
     h1: "Download YouTube subtitles as SRT or VTT",
-    lead: "This page is for a subtitle file you can drop into VLC, Premiere, or a website <track>. That is a different artifact from “copy the transcript”: SRT/VTT need cue index, start, end, and text. We build those from YouTube’s timed captions.",
+    lead: "Download subtitles from a public YouTube video when you need a file, not a paragraph. SRT and VTT carry cue index, start, end, and text for VLC, an editor, or a website track. We build them from the caption track YouTube already published.",
     howto_title: "How to get an SRT from YouTube",
     howto: [
         ("Paste the video", "Open it in the app so cues have start and duration."),
         ("Pick the track", "Human captions usually beat auto for names. Translate first if you need another language in the file."),
         ("Download SRT or VTT", "SRT uses comma milliseconds; VTT is WEBVTT with dots. Same cues, different wrapping."),
     ],
-    why_title: "Why a dedicated SRT landing",
+    why_title: "Why download the subtitles instead of copying the transcript",
     why: [
         ("Players want files", "Copy-paste into a doc is not a subtitle. SRT is."),
         ("VTT for the web", "If you are adding captions to HTML5 video, download VTT, not TXT."),

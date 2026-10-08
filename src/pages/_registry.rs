@@ -14,8 +14,12 @@ impl FlowPageRegistry for PagesRegistry {
             ("/youtube-translator", "youtube_translator"),
             ("/youtube-summary", "youtube_summary"),
             ("/youtube-to-srt", "youtube_to_srt"),
+            ("/youtube-transcript-download", "youtube_transcript_download"),
+            ("/youtube-transcript-generator", "youtube_transcript_generator"),
+            ("/convert-youtube-video-to-text", "convert_youtube_video_to_text"),
             ("/guides", "guides"),
             ("/guides/youtube-transcript", "guide_youtube_transcript"),
+            ("/guides/see-transcript-on-youtube", "guide_see_transcript"),
             ("/guides/srt-vs-vtt", "guide_srt_vs_vtt"),
             ("/guides/youtube-to-mp3", "guide_youtube_to_mp3"),
             ("/privacy", "privacy"),
@@ -41,8 +45,14 @@ impl FlowPageRegistry for PagesRegistry {
             "youtube_translator" => Some(super::youtube_translator::page(req)),
             "youtube_summary" => Some(super::youtube_summary::page(req)),
             "youtube_to_srt" => Some(super::youtube_to_srt::page(req)),
+            "youtube_transcript_download" => Some(super::youtube_transcript_download::page(req)),
+            "youtube_transcript_generator" => Some(super::youtube_transcript_generator::page(req)),
+            "convert_youtube_video_to_text" => {
+                Some(super::convert_youtube_video_to_text::page(req))
+            }
             "guides" => Some(super::guides::page(req)),
             "guide_youtube_transcript" => Some(super::guide_youtube_transcript::page(req)),
+            "guide_see_transcript" => Some(super::guide_see_transcript::page(req)),
             "guide_srt_vs_vtt" => Some(super::guide_srt_vs_vtt::page(req)),
             "guide_youtube_to_mp3" => Some(super::guide_youtube_to_mp3::page(req)),
             "privacy" => Some(super::privacy::page(req)),

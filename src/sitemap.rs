@@ -35,9 +35,14 @@ pub fn sitemap_body() -> String {
         ));
     }
 
+    for page in crate::keyword_landings::ALL {
+        xml.push_str(&url_entry(&canonical_url(page.path), "0.9", "monthly"));
+    }
+
     for path in [
         "/guides",
         "/guides/youtube-transcript",
+        "/guides/see-transcript-on-youtube",
         "/guides/srt-vs-vtt",
         "/guides/youtube-to-mp3",
         "/extension",
@@ -61,6 +66,10 @@ mod tests {
         assert!(body.contains("/youtube-to-text"));
         assert!(body.contains("/youtube-to-audio"));
         assert!(body.contains("/guides/youtube-transcript"));
+        assert!(body.contains("/guides/see-transcript-on-youtube"));
+        assert!(body.contains("/youtube-transcript-download"));
+        assert!(body.contains("/youtube-transcript-generator"));
+        assert!(body.contains("/convert-youtube-video-to-text"));
         assert!(!body.contains("/youtube-a-texto"));
         assert!(!body.contains("hreflang"));
         assert!(!body.contains("/developers/welcome"));

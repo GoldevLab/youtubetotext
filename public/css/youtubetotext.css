@@ -996,6 +996,22 @@ select:focus-visible {
   line-height: 1.55;
 }
 
+.guide-article > h2 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.guide-links {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}
+
+.guide-links a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .site-footer {
   view-transition-name: site-footer;
   max-width: var(--max);

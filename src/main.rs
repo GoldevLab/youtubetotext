@@ -9,6 +9,7 @@ mod export;
 mod family;
 mod guard;
 mod guides;
+mod keyword_landings;
 mod landing;
 mod langs;
 mod meta_conversions;
@@ -308,7 +309,7 @@ const HEAD: &str = r##"
 <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
 <link rel="preload" href="/themes.css" as="style" />
-<link rel="preload" href="/css/youtubetotext.css?v=r6" as="style" />
+<link rel="preload" href="/css/youtubetotext.css?v=r7" as="style" />
 <link rel="stylesheet" href="/themes.css" />
 <script type="module" src="/js/youtubetotext.js?v=18" fetchpriority="low"></script>
 "##;
@@ -318,8 +319,9 @@ fn seo_kit() -> SeoKit {
     let mut kit = SeoKit::new("YouTubeForge", &origin)
         .with_locale("en_US")
         .with_keywords(
-            "YouTube transcript, YouTube to text, download YouTube captions, \
-             YouTube SRT, YouTube VTT, YouTube to audio, free transcript, caption translator",
+            "YouTube transcript, transcribe YouTube video, YouTube transcript download, \
+             free YouTube transcript generator, convert YouTube video to text, \
+             download YouTube subtitles, YouTube to text, YouTube SRT",
         )
         .with_llms_summary(
             "YouTubeForge turns a YouTube URL into a searchable, downloadable transcript. \
@@ -336,7 +338,7 @@ fn seo_kit() -> SeoKit {
         ),
         (
             "SEO landings".into(),
-            "/youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary, /youtube-to-srt. Guides: /guides, /guides/youtube-transcript, /guides/srt-vs-vtt, /guides/youtube-to-mp3. /privacy /terms /extension.".into(),
+            "/ transcribes a public video. /youtube-transcript-download, /youtube-transcript-generator, /convert-youtube-video-to-text, /youtube-to-srt (subtitles). Also /youtube-to-text, /youtube-to-audio, /youtube-translator, /youtube-summary. Guides: /guides, /guides/youtube-transcript, /guides/see-transcript-on-youtube, /guides/srt-vs-vtt, /guides/youtube-to-mp3.".into(),
         ),
     ];
     kit.ai.disallow = vec!["/api/".into()];
@@ -381,7 +383,7 @@ async fn main() -> std::io::Result<()> {
                 .cookie("ytt_theme")
                 .storage_key("ytt-theme"),
         )
-        .with_stylesheet("/css/youtubetotext.css?v=r6")
+        .with_stylesheet("/css/youtubetotext.css?v=r7")
         .static_asset("/icon.svg", ICON, "image/svg+xml");
     if let Some(body) = ads_txt {
         app = app.static_asset("/ads.txt", body, "text/plain; charset=utf-8");
@@ -407,7 +409,7 @@ async fn main() -> std::io::Result<()> {
         .with_pwa(FlowPwaConfig {
             name: "ForgeYT".into(),
             short_name: "ForgeYT".into(),
-            description: "YouTube transcripts, audio, SRT, translation, and summaries.".into(),
+            description: "Free YouTube transcripts. Transcribe a public video, then download TXT or subtitles.".into(),
             theme_color: "#14090a".into(),
             background_color: "#14090a".into(),
             start_url: "/".into(),
@@ -419,7 +421,7 @@ async fn main() -> std::io::Result<()> {
             icon_char: Some("F".into()),
             precache_paths: vec![
                 "/themes.css".into(),
-                "/css/youtubetotext.css?v=r6".into(),
+                "/css/youtubetotext.css?v=r7".into(),
                 "/js/youtubetotext.js?v=18".into(),
                 "/icon.svg".into(),
                 "/icons/icon-192.png".into(),

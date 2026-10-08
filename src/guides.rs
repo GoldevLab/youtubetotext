@@ -16,56 +16,66 @@ pub struct Guide {
     pub mode: Mode,
     pub sections: &'static [(&'static str, &'static str)],
     pub faq: &'static [(&'static str, &'static str)],
+    /// Tool and guide URLs this article should pass readers to.
+    pub links: &'static [(&'static str, &'static str)],
 }
 
-pub const ALL: &[Guide] = &[TRANSCRIPT, SRT_VTT, MP3];
+pub const ALL: &[Guide] = &[TRANSCRIPT, SEE_ON_YOUTUBE, SRT_VTT, MP3];
 
 pub const TRANSCRIPT: Guide = Guide {
     path: "/guides/youtube-transcript",
-    title: "How to Get a YouTube Transcript (Free, No Account) | YouTubeForge",
-    description: "Paste a public YouTube link and read searchable captions. Copy quotes, download TXT/Markdown, jump timestamps. Uses YouTube’s public subtitle tracks.",
-    h1: "How to get a YouTube transcript for free",
-    lead: "You do not need to re-type an interview. If YouTube published captions (human or auto), YouTubeForge turns them into searchable text you can copy, download, or skim with timestamps.",
+    title: "How to Get a Transcript of a YouTube Video | YouTubeForge",
+    description: "How to get a transcript from any public YouTube video, transcribe it from the captions, and download TXT or SRT. No account.",
+    h1: "How to get a transcript from any YouTube video",
+    lead: "Paste the link. If YouTube published captions, you get the transcript as searchable text — then you can copy it or download a file. You do not re-type the video, and we do not run speech-to-text on our servers.",
     mode: Mode::Text,
     sections: &[
         (
-            "What “transcript” means here",
-            "A transcript on YouTubeForge is the caption track YouTube already exposes — timed lines you can search, trim, and export. We do not run speech-to-text on our servers. If the video has no captions, there is nothing to extract.",
+            "How to get a transcript of a YouTube video",
+            "Copy a watch URL, a Shorts link, a youtu.be link, or the 11-character video id. Paste it in the box on this page, or on the YouTube transcript tool at forgeyt.com. The lines open next to the player at /?v= (that result URL stays noindex). Search a name, click a line to jump, and copy the quote.",
         ),
         (
-            "Step 1 — Copy the video link",
-            "Use a watch URL, Shorts link, youtu.be short link, or the 11-character video id. Private, age-restricted, or live-only videos usually fail because captions are not publicly available the same way.",
+            "How to get the transcript from a YouTube video link",
+            "The link is the whole input. Private, age-restricted, members-only, and many livestreams fail because the caption track is not public. A normal public upload with auto-captions or a human track works.",
         ),
         (
-            "Step 2 — Paste on YouTubeForge",
-            "Open the box below (or /youtube-to-text), paste, and submit. The result opens at /?v= with the text beside the player. That result URL stays noindex so it does not flood search.",
+            "How to transcribe a YouTube video",
+            "Transcribe here means reading the caption track YouTube already made, human or automatic. It does not mean sending the audio through another speech model. If you only need to follow along inside YouTube, use Show transcript on the watch page. Use YouTubeForge when you need search, a copy, or a file.",
         ),
         (
-            "Step 3 — Find the line you need",
-            "Search for a name or phrase, skip intro/outro with the range tools, click a line to jump the video, then copy plain text or Markdown with timestamps.",
+            "How to download a YouTube transcript",
+            "Open the video in the tool, then save TXT or Markdown to read, or SRT/VTT when an editor needs timestamps. The download page walks through the formats. The file matches the lines on screen, including any edit you made in the browser.",
         ),
         (
-            "When this beats watching",
-            "Hour-long interviews, lectures, and podcasts uploads are faster as text when you only need a quote, a name, or a claim. Export SRT if you need timed subtitles in an editor.",
+            "When the transcript beats watching",
+            "Hour-long interviews, lectures, and podcast uploads are faster as text when you need a quote, a name, or a claim. Download subtitles if the next step is a player, not a doc.",
         ),
         (
             "Limits to expect",
-            "No captions published → nothing to show. Auto-captions can mis-hear names; edit on-device before you trust a citation. We are not YouTube or Google.",
+            "No captions published means nothing to show. Auto-captions mis-hear names; fix them on the page before you cite them. We are not YouTube or Google.",
         ),
     ],
     faq: &[
         (
-            "Is a YouTube transcript free on YouTubeForge?",
-            "Yes. No account. Ads may appear around the tool.",
+            "How do I get a transcript of a YouTube video for free?",
+            "Paste the public link on YouTubeForge. No account. Ads may appear around the tool.",
         ),
         (
-            "Do you invent speech from the audio?",
-            "No. We read public caption tracks. No captions means no transcript.",
+            "Can I transcribe a video that has no captions?",
+            "Not here. We do not invent speech from the audio. No public caption track means no transcript.",
         ),
         (
-            "Can I download the transcript?",
-            "Yes — TXT, Markdown, JSON, plus SRT/VTT when you need timed files.",
+            "Can I download the transcript after I generate it?",
+            "Yes. TXT, Markdown, JSON, SRT, and VTT. Start from the download page if the file is the whole job.",
         ),
+    ],
+    links: &[
+        ("/", "YouTube transcript tool"),
+        ("/youtube-transcript-download", "Download the transcript"),
+        ("/youtube-transcript-generator", "Free transcript generator"),
+        ("/convert-youtube-video-to-text", "Convert the video to text"),
+        ("/youtube-to-srt", "Download subtitles (SRT / VTT)"),
+        ("/guides/see-transcript-on-youtube", "See the transcript inside YouTube"),
     ],
 };
 
@@ -112,6 +122,11 @@ pub const SRT_VTT: Guide = Guide {
             "No. You get a sidecar subtitle file to load in a player or editor.",
         ),
     ],
+    links: &[
+        ("/youtube-to-srt", "Download YouTube subtitles"),
+        ("/youtube-transcript-download", "Download the transcript as text"),
+        ("/guides/youtube-transcript", "How to get a transcript"),
+    ],
 };
 
 pub const MP3: Guide = Guide {
@@ -156,6 +171,65 @@ pub const MP3: Guide = Guide {
             "Why did a download fail?",
             "Private, age-gated, live-only, or region-blocked videos often cannot resolve a plain audio URL. Try another public video.",
         ),
+    ],
+    links: &[
+        ("/youtube-to-audio", "YouTube to MP3"),
+        ("/", "Get the transcript instead"),
+        ("/guides/youtube-transcript", "How to get a transcript"),
+    ],
+};
+
+pub const SEE_ON_YOUTUBE: Guide = Guide {
+    path: "/guides/see-transcript-on-youtube",
+    title: "How to See the Transcript on YouTube | YouTubeForge",
+    description: "How to see, find, open, and show the transcript on YouTube — desktop and phone — and what to do when Show transcript is missing.",
+    h1: "How to see the transcript on YouTube",
+    lead: "YouTube can show the caption track on the watch page. Open that panel when you only need to follow along. Use YouTubeForge when you need to search, copy, or download the same words.",
+    mode: Mode::Text,
+    sections: &[
+        (
+            "How to see the transcript on YouTube (computer)",
+            "Open the video on youtube.com. Under the title, expand the description (…more). Click Show transcript. A panel lists the lines with timestamps. Click a line to jump the video. The button sits in the description area, not in the player gear menu.",
+        ),
+        (
+            "How to find the transcript when you do not see a button",
+            "Scroll the description again. Show transcript only appears when that video has a caption track. The CC button in the player turns captions on the picture; it does not open the transcript panel. If neither CC nor Show transcript exists, YouTube never published captions for that upload.",
+        ),
+        (
+            "How to open the transcript on your phone",
+            "In the YouTube app or mobile site, open the video, tap the description (or the arrow under the title), then tap Show transcript. The lines replace the description until you close the panel.",
+        ),
+        (
+            "How to view or show the transcript",
+            "View, show, and open are the same control: Show transcript, after the description is expanded. There is no separate switch in Settings. If the panel is blank, switch caption language from the panel menu when the video has more than one track.",
+        ),
+        (
+            "How to pull up a transcript when YouTube has none",
+            "You cannot. Show transcript is hidden when there is no public caption track. YouTubeForge reads that same track, so a missing button there means no transcript here either. We do not listen to the audio and write a new one.",
+        ),
+        (
+            "When the on-YouTube panel is not enough",
+            "The panel does not hand you a TXT, SRT, or VTT file, and it is awkward to search across a long interview. Paste the same link into YouTubeForge to search the lines, copy a quote, or download the file.",
+        ),
+    ],
+    faq: &[
+        (
+            "Where is Show transcript?",
+            "On a computer, expand the description under the video, then click Show transcript. On a phone, open the description first.",
+        ),
+        (
+            "Why can’t I find the transcript?",
+            "The video has no caption track, the description is still collapsed, or you are looking in the player settings instead of under the video.",
+        ),
+        (
+            "Can I download the transcript from that panel?",
+            "YouTube’s panel is for reading and jumping. To save TXT, SRT, or VTT, paste the link on YouTubeForge.",
+        ),
+    ],
+    links: &[
+        ("/", "Get a searchable YouTube transcript"),
+        ("/youtube-transcript-download", "Download the transcript"),
+        ("/guides/youtube-transcript", "How to get a transcript from any video"),
     ],
 };
 
@@ -242,6 +316,18 @@ pub fn render(g: &Guide) -> View {
             }
         })
         .collect();
+    let related_links: Vec<View> = g
+        .links
+        .iter()
+        .map(|(href, label)| {
+            let href = (*href).to_string();
+            view! {
+                <li>
+                    <NavLink href={href}>{*label}</NavLink>
+                </li>
+            }
+        })
+        .collect();
     let tool_href = g.mode.landing_path().to_string();
     let tool_label = match g.mode {
         Mode::Text => "Open YouTube to text",
@@ -267,6 +353,8 @@ pub fn render(g: &Guide) -> View {
 
             <article class="content-section guide-article">
                 {sections}
+                <h2>"Use the tool"</h2>
+                <ul class="guide-links">{related_links}</ul>
                 <p class="error-actions">
                     <NavLink href={tool_href} class="btn btn-primary">{tool_label}</NavLink>
                     <NavLink href="/guides" class="btn btn-ghost">"All guides"</NavLink>
@@ -289,7 +377,7 @@ pub fn render(g: &Guide) -> View {
 pub fn index_page() -> View {
     set_page_title("Guides — YouTube Transcript, SRT, MP3 | YouTubeForge");
     set_page_description(
-        "Short guides: get a YouTube transcript, choose SRT vs VTT, and save audio as MP3. Free tools on forgeyt.com.",
+        "How to get a YouTube transcript, how to open it on YouTube, SRT vs VTT, and YouTube to MP3. Each guide ends on the free tool.",
     );
     set_page_canonical(canonical_url("/guides"));
 

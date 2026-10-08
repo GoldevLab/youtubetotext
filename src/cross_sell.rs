@@ -52,10 +52,74 @@ pub fn related(current: Mode) -> View {
     }
 }
 
+const TRANSCRIPT_JOBS: &[(&str, &str, &str)] = &[
+    (
+        "/",
+        "YouTube transcript",
+        "Transcribe a public video from its captions.",
+    ),
+    (
+        "/youtube-transcript-download",
+        "Download the transcript",
+        "Save TXT, Markdown, SRT, or VTT.",
+    ),
+    (
+        "/youtube-transcript-generator",
+        "Free transcript generator",
+        "No account. Uses the captions YouTube already published.",
+    ),
+    (
+        "/convert-youtube-video-to-text",
+        "Convert video to text",
+        "Plain text for notes, quotes, and other tools.",
+    ),
+    (
+        "/youtube-to-srt",
+        "Download YouTube subtitles",
+        "SRT or VTT for a player or an editor.",
+    ),
+];
+
+pub fn transcript_jobs(current: Option<&str>) -> View {
+    let cards = TRANSCRIPT_JOBS
+        .iter()
+        .filter(|(href, _, _)| current != Some(*href))
+        .map(|(href, label, hint)| {
+            let href = (*href).to_string();
+            view! {
+                <li>
+                    <a href={href} class="related-card" data-r-nav="true">
+                        <strong>{*label}</strong>
+                        <span>{*hint}</span>
+                    </a>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! {
+        <nav class="cross-sell" aria-label="YouTube transcript tools">
+            <h2>"YouTube transcript tools"</h2>
+            <p class="hint">
+                "Same paste box. Download the file, generate the lines for free, convert the video to text, or save subtitles."
+            </p>
+            <ul class="related-grid">{cards}</ul>
+        </nav>
+    }
+}
+
 pub fn seo_footer_links() -> View {
     view! {
         <nav class="seo-links" aria-label="YouTubeForge tools">
-            <NavLink href="/youtube-to-text">"Transcript"</NavLink>
+            <NavLink href="/">"Transcript"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-transcript-download">"Download"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-transcript-generator">"Generator"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/convert-youtube-video-to-text">"Convert to text"</NavLink>
+            <span aria-hidden="true">" · "</span>
+            <NavLink href="/youtube-to-text">"YouTube to text"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/youtube-to-audio">"Audio / MP3"</NavLink>
             <span aria-hidden="true">" · "</span>
@@ -63,7 +127,7 @@ pub fn seo_footer_links() -> View {
             <span aria-hidden="true">" · "</span>
             <NavLink href="/youtube-summary">"Summary"</NavLink>
             <span aria-hidden="true">" · "</span>
-            <NavLink href="/youtube-to-srt">"SRT"</NavLink>
+            <NavLink href="/youtube-to-srt">"Subtitles"</NavLink>
             <span aria-hidden="true">" · "</span>
             <NavLink href="/guides">"Guides"</NavLink>
             <span aria-hidden="true">" · "</span>

@@ -36,9 +36,9 @@ fn idle() -> View {
                 <section class="hero">
                     <div class="hero-copy">
                         <p class="eyebrow">"YouTubeForge"</p>
-                        <h1>"YouTube transcript, MP3, SRT, and more"</h1>
+                        <h1>"Get a YouTube transcript from any public video"</h1>
                         <p class="hero-lead">
-                            "Paste a public link once. Get a searchable transcript, download SRT or audio, translate captions, or grab a short recap — same video, no account."
+                            "Transcribe a YouTube video from the captions YouTube already published. Paste a public link, search the lines, then copy the text or download TXT, SRT, or VTT. No account."
                         </p>
                         {home_search(Mode::Text)}
                     </div>
@@ -49,22 +49,23 @@ fn idle() -> View {
                 <ol class="howto-grid">
                     <li>
                         <h3>"Paste the link"</h3>
-                        <p>"A watch URL, Shorts, youtu.be, or the video id. No account. We read YouTube’s public caption tracks — we do not invent speech from the audio."</p>
+                        <p>"A watch URL, Shorts, youtu.be, or the video id. No account. Transcribe means we read YouTube’s public caption track — we do not invent speech from the audio."</p>
                     </li>
                     <li>
-                        <h3>"Read and export"</h3>
-                        <p>"Search lines, skip intros, copy the text, or download TXT, SRT, VTT, or Markdown. MP3 is the default audio download."</p>
+                        <h3>"Read the transcript"</h3>
+                        <p>"Search lines, skip the intro, and click a cue to jump the video. Copy the text or download TXT, Markdown, SRT, or VTT."</p>
                     </li>
                     <li>
                         <h3>"Stay on this video"</h3>
-                        <p>"The result URL uses ?v= and mode=text (not indexed). Audio, translation, a recap, and SRT stay on that same page."</p>
+                        <p>"The result URL uses ?v= and mode=text (not indexed). Subtitles, translation, a recap, and audio stay on that same page."</p>
                     </li>
                 </ol>
             </section>
+            {crate::cross_sell::transcript_jobs(Some("/"))}
             <section class="features" aria-labelledby="jobs-title">
-                <h2 id="jobs-title">"Choose what you need from the video"</h2>
+                <h2 id="jobs-title">"Other jobs on the same video"</h2>
                 <p class="hint">
-                    "Transcript, audio, translation, summary, or subtitles — same paste box, different outcome."
+                    "Audio, translation, a chapter recap, or a subtitle file — same paste box, after the transcript."
                 </p>
                 <ul class="feature-grid">
                     <li>
@@ -84,8 +85,8 @@ fn idle() -> View {
                         <p>"Extractive recap from the captions, plus a prompt for your own model."</p>
                     </li>
                     <li>
-                        <h3><NavLink href="/youtube-to-srt">"SRT / VTT"</NavLink></h3>
-                        <p>"Timed subtitle files for VLC, editors, and HTML5 tracks."</p>
+                        <h3><NavLink href="/youtube-to-srt">"Download YouTube subtitles"</NavLink></h3>
+                        <p>"SRT or VTT from the same captions, for a player or an editor."</p>
                     </li>
                 </ul>
             </section>
@@ -97,8 +98,12 @@ fn idle() -> View {
                 </p>
                 <ul class="feature-grid">
                     <li>
-                        <h3><NavLink href="/guides/youtube-transcript">"How to get a YouTube transcript"</NavLink></h3>
-                        <p>"Paste a public link, search lines, copy or download. No account."</p>
+                        <h3><NavLink href="/guides/youtube-transcript">"How to get a transcript from any YouTube video"</NavLink></h3>
+                        <p>"Paste a public link, transcribe from the captions, then copy or download."</p>
+                    </li>
+                    <li>
+                        <h3><NavLink href="/guides/see-transcript-on-youtube">"How to see the transcript on YouTube"</NavLink></h3>
+                        <p>"Show transcript on desktop and phone, and what to do when the button is missing."</p>
                     </li>
                     <li>
                         <h3><NavLink href="/guides/srt-vs-vtt">"SRT vs VTT"</NavLink></h3>
@@ -123,8 +128,16 @@ fn idle() -> View {
                         <p>"Every result lives on the home URL with v= and mode=text. Optional query params: lang, tlang, and mode (audio, translate, summary, srt). Those URLs are noindex."</p>
                     </details>
                     <details>
+                        <summary>"How do I transcribe a YouTube video?"</summary>
+                        <p>"Paste a public link. YouTubeForge loads the caption track and shows it as text. It does not run speech-to-text on the audio. No captions means no transcript."</p>
+                    </details>
+                    <details>
                         <summary>"Can I download the transcript?"</summary>
-                        <p>"Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON. Copy and Copy Markdown are also available."</p>
+                        <p>
+                            "Yes. TXT, SRT, VTT, Markdown, or JSON — use the "
+                            <NavLink href="/youtube-transcript-download">"transcript download"</NavLink>
+                            " page when the file is the whole job. Copy and Copy Markdown work on the result too."
+                        </p>
                     </details>
                     <details>
                         <summary>"Is there a limit to the length of the video?"</summary>

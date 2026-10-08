@@ -12,7 +12,7 @@ pub fn web_application_json_ld() -> Value {
         "@type": "WebApplication",
         "@id": format!("{origin}/#app"),
         "name": "YouTubeForge",
-        "alternateName": ["YouTube transcript", "YouTube to text", "YouTube to SRT"],
+        "alternateName": ["YouTube transcript", "Transcribe YouTube video", "YouTube to text", "YouTube transcript download"],
         "url": origin,
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Any",
@@ -25,7 +25,7 @@ pub fn web_application_json_ld() -> Value {
             "Download audio (MP3/M4A)",
             "Chapter-style summary from captions"
         ],
-        "description": "Free YouTube transcript tool: search, download SRT/VTT, translate captions, save audio. No account."
+        "description": "Free YouTube transcript tool. Transcribe a public video from its captions, then download TXT, SRT, or VTT. No account."
     })
 }
 
@@ -57,8 +57,8 @@ pub fn home_structured_data() -> Value {
             web_application_json_ld(),
             {
                 "@type": "HowTo",
-                "name": "Get a YouTube transcript with YouTubeForge",
-                "description": "Paste a public YouTube URL and read, search, or download the captions.",
+                "name": "Transcribe a YouTube video with YouTubeForge",
+                "description": "Paste a public YouTube URL and read, search, or download the transcript.",
                 "totalTime": "PT1M",
                 "step": [
                     {
@@ -106,7 +106,15 @@ pub fn home_structured_data() -> Value {
                         "name": "Can I download the transcript?",
                         "acceptedAnswer": {
                             "@type": "Answer",
-                            "text": "Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON. Copy and Copy Markdown are also available."
+                            "text": "Yes. Download TXT, SRT, VTT, Markdown with timestamp links, or JSON from the transcript download page. Copy and Copy Markdown are also available."
+                        }
+                    },
+                    {
+                        "@type": "Question",
+                        "name": "How do I transcribe a YouTube video?",
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": "Paste a public watch link, Short, or youtu.be URL. YouTubeForge loads the caption track YouTube already published and shows it as searchable text. It does not run speech-to-text on the audio."
                         }
                     },
                     {
@@ -138,11 +146,15 @@ pub fn home_json_ld_script() -> String {
 }
 
 pub fn seo_landing(mode: Mode) -> View {
-    render_landing(mode, landing_for(mode))
+    let path = mode.landing_path();
+    render_landing(mode, path, landing_for(mode))
 }
 
-fn render_landing(mode: Mode, landing: crate::family::Landing) -> View {
-    let path = mode.landing_path();
+pub fn seo_page(mode: Mode, path: &'static str, landing: crate::family::Landing) -> View {
+    render_landing(mode, path, landing)
+}
+
+fn render_landing(mode: Mode, path: &str, landing: crate::family::Landing) -> View {
     set_page_title(landing.title);
     set_page_description(landing.description);
     set_page_canonical(canonical_url(path));
@@ -238,6 +250,7 @@ fn render_landing(mode: Mode, landing: crate::family::Landing) -> View {
                 <div class="faq-list">{faq}</div>
             </section>
 
+            {crate::cross_sell::transcript_jobs(Some(path))}
             {crate::cross_sell::related(mode)}
             {crate::cross_sell::guides_nav(None)}
         </main>
