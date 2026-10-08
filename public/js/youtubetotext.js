@@ -401,30 +401,41 @@
     return null;
   };
 
-  const startIframeDownload = (href, onError) => {
+  const startIframeDownload = (href, onError, onStarted) => {
     if (!href || !/[?&]v=/.test(href)) return false;
     const frame = document.createElement("iframe");
     frame.hidden = true;
     frame.setAttribute("aria-hidden", "true");
     let reported = false;
+    let started = false;
     const report = (err) => {
       if (reported || !err) return;
       reported = true;
       if (typeof onError === "function") onError(err);
       frame.remove();
     };
+    const markStarted = () => {
+      if (started || reported) return;
+      started = true;
+      if (typeof onStarted === "function") onStarted();
+    };
     const probe = () => {
       const err = readIframeJsonError(frame);
       if (err) report(err);
     };
-    frame.addEventListener("load", probe);
+    frame.addEventListener("load", () => {
+      probe();
+      if (!reported) markStarted();
+    });
     const iv = setInterval(probe, 1500);
     frame.src = href;
     document.body.append(frame);
+    // Server waits 270s for yt-dlp before the file even starts, then the
+    // browser still has to receive it. Removing this iframe aborts that request.
     setTimeout(() => {
       clearInterval(iv);
       if (!reported) frame.remove();
-    }, 180000);
+    }, 30 * 60 * 1000);
     return true;
   };
 
@@ -545,17 +556,21 @@
         }
       }
       await showDlDialog(root, kind);
-      startIframeDownload(href, (e) => {
-        closeDlDialog(root);
-        fail(e && e.message ? e.message : "Download is not available right now.");
-      });
-      try {
-        track("download_ok", {
-          media_kind: kind === "video" ? "video" : "audio",
-          quality: kind === "video" ? String(q || "") : undefined,
-        });
-      } catch (_) {}
-      return true;
+      return startIframeDownload(
+        href,
+        (e) => {
+          closeDlDialog(root);
+          fail(e && e.message ? e.message : "Download is not available right now.");
+        },
+        () => {
+          try {
+            track("download_ok", {
+              media_kind: kind === "video" ? "video" : "audio",
+              quality: kind === "video" ? String(q || "") : undefined,
+            });
+          } catch (_) {}
+        },
+      );
     } catch (e) {
       fail(e && e.message ? e.message : "Download is not available right now.");
       return false;

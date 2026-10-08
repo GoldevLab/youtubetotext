@@ -2659,10 +2659,8 @@ pub async fn deny_if_audio_too_long(video_id: &str, _fmt: &str) -> Result<(), Fe
                 ),
             ))
         }
-        None => Err(FetchError::new(
-            400,
-            "Could not read this video's length. Try a shorter video.",
-        )),
+        // Unknown length matches 360p/480p: a missing InnerTube duration must not
+        // block a download that is otherwise allowed. A known overrun still fails.
         _ => Ok(()),
     }
 }
